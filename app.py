@@ -22,7 +22,7 @@ gc = gspread.authorize(creds)
 
 # ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 # TU ID REAL (el que me pasaste)
-SPREADSHEET_ID = "1S3IefMfXZXbL-dQyNe_-QfUUoo6a9toMEfm-47HNQNQ"
+SPREADSHEET_ID = "1FSarYjk_pUTkKCi9R1-S9pmIY2E14yJcqDWHjpONduQ"
 spreadsheet = gc.open_by_key(SPREADSHEET_ID)
 # ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 
