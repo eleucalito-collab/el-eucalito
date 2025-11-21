@@ -5,171 +5,157 @@ import google.generativeai as genai
 from datetime import date
 import gspread
 from google.oauth2.service_account import Credentials
-import requests
-import json
 
+# === Lista de los 12 primos ===
 primos = ["Pablo", "Camila", "Marie", "Marian", "Rorro", "Martín", "Carolina", "Tony", "Joaquín", "Mica", "Nico", "Pauli"]
 
+# === Configuración página ===
 st.set_page_config(page_title="El Eucalito", layout="wide")
 st.title("🌴 Contabilidad Familiar - El Eucalito")
 
-# Conexión Google Sheets
-scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+# === Conexión con Google Sheets (AHORA POR ID → NUNCA MÁS FALLA) ===
+creds = Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"],
+    scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+)
 gc = gspread.authorize(creds)
-spreadsheet = gc.open("El Eucalito")
+
+# ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+# TU ID REAL (el que me pasaste)
+SPREADSHEET_ID = "1S3IefMfXZXbL-dQyNe_-QfUUoo6a9toMEfm-47HNQNQ"
+spreadsheet = gc.open_by_key(SPREADSHEET_ID)
+# ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+
 trans_sheet = spreadsheet.worksheet("Transacciones")
+config_sheet = spreadsheet.worksheet("Config")
 
-# Encabezados
-if not trans_sheet.row_values(1):
-    trans_sheet.update('A1:I1', [["fecha","descripcion","monto","moneda","monto_usd","categoria","tipo","pagado_por","beneficiario"]])
+# === Tasa de cambio ===
+try:
+    tasa = float(config_sheet.cell(1, 2).value or 42.0)
+except:
+    tasa = 42.0
 
-# Cotización real
-@st.cache_data(ttl=3600)
-def get_rate(fecha="latest"):
-    url = f"https://api.exchangerate.host/{fecha}?base=USD&symbols=UYU"
-    try:
-        return requests.get(url).json()["rates"]["UYU"]
-    except:
-        return 42.0
+new_tasa = st.sidebar.number_input("Tasa UYU → USD", value=tasa, step=0.1, format="%.2f")
+if new_tasa != tasa:
+    if st.sidebar.button("💾 Guardar nueva tasa"):
+        config_sheet.update("B1", [[new_tasa]])
+        st.sidebar.success(f"Tasa actualizada a {new_tasa}")
+        st.rerun()
 
-tasa_hoy = get_rate()
-st.sidebar.success(f"🇺🇾 Cotización hoy: 1 USD = {tasa_hoy:.2f} UYU")
+# === Cargar transacciones ===
+records = trans_sheet.get_all_records()
+df = pd.DataFrame(records)
 
-if st.sidebar.button("Actualizar histórico con tasas reales"):
-    with st.spinner("Recalculando todo..."):
-        records = trans_sheet.get_all_records()
-        updates = []
-        for i, row in enumerate(records, start=2):
-            if row.get("moneda", "").upper() == "UYU" and row.get("monto"):
-                rate = get_rate(row.get("fecha", "latest"))
-                nuevo_usd = round(float(row["monto"]) / rate, 4)
-                updates.append({"range": f"E{i}", "values": [[nuevo_usd]]})
-        if updates:
-            trans_sheet.batch_update(updates)
-    st.sidebar.success("¡Histórico actualizado!")
-
-# Cargar datos
-df = pd.DataFrame(trans_sheet.get_all_records())
 if not df.empty:
     df["monto"] = pd.to_numeric(df["monto"], errors="coerce").fillna(0)
     df["monto_usd"] = pd.to_numeric(df["monto_usd"], errors="coerce").fillna(0)
-    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
+    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce", dayfirst=True)
 
-# Cálculos
+# Si está vacío, crea las cabeceras
+if df.empty and len(trans_sheet.row_values(1)) == 0:
+    trans_sheet.update('A1:I1', [["fecha","descripcion","monto","moneda","monto_usd","categoria","tipo","pagado_por","beneficiario"]])
+
+# === Cálculos ===
 total_ingresos = df[df["tipo"] == "Ingreso"]["monto_usd"].sum()
 total_gastos = df[df["tipo"] == "Gasto"]["monto_usd"].sum()
-balance_actual = total_ingresos - total_gastos
+balance_caja = total_ingresos - total_gastos
 
 balances = pd.Series(0.0, index=primos)
-if not df.empty:
-    balances += df[(df["tipo"] == "Gasto") & (df["pagado_por"].isin(primos))].groupby("pagado_por")["monto_usd"].sum()
-    balances += df[df["tipo"] == "Préstamo a Casa"].groupby("pagado_por")["monto_usd"].sum()
-    balances -= df[df["tipo"] == "Préstamo a Primo"].groupby("beneficiario")["monto_usd"].sum()
+# Gastos pagados por primos (la casa les debe)
+balances += df[(df["tipo"] == "Gasto") & (df["pagado_por"].isin(primos))].groupby("pagado_por")["monto_usd"].sum()
+# Préstamos de primos a la casa
+balances += df[df["tipo"] == "Préstamo a Casa"].groupby("pagado_por")["monto_usd"].sum()
+# Préstamos de la casa a primos (primos deben)
+balances -= df[df["tipo"] == "Préstamo a Primo"].groupby("beneficiario")["monto_usd"].sum()
 
-# Tabs
-tab1, tab2, tab3, tab4 = st.tabs(["Dashboard", "Nueva Transacción", "Categorías", "Transacciones"])
+# === Pestañas ===
+tab1, tab2, tab3 = st.tabs(["🏠 Dashboard", "✏️ Nueva Transacción", "📊 Por Categorías"])
 
 with tab1:
     c1, c2, c3 = st.columns(3)
-    c1.metric("Ingresos", f"${total_ingresos:,.2f}")
-    c2.metric("Gastos", f"${total_gastos:,.2f}")
-    c3.metric("Caja", f"${balance_actual:,.2f}")
+    c1.metric("Ingresos totales", f"${total_ingresos:,.2f}")
+    c2.metric("Gastos totales", f"${total_gastos:,.2f}")
+    c3.metric("Balance caja", f"${balance_caja:,.2f}", delta_color="normal" if balance_caja >= 0 else "inverse")
 
-    st.header("Estado de cuentas con primos")
+    st.subheader("Saldo con cada primo")
     cols = st.columns(3)
     for i, primo in enumerate(primos):
+        saldo = balances.get(primo, 0.0)
         with cols[i % 3]:
-            valor = balances.get(primo, 0)
-            st.metric(primo, f"${valor:,.2f}", delta_color="normal" if valor >= 0 else "inverse")
+            st.metric(primo, f"${saldo:,.2f}", delta_color="normal" if saldo >= 0 else "inverse")
 
     gastos = df[df["tipo"] == "Gasto"]
-    if not gastos.empty:
+    if not gastos.empty and gastos["categoria"].notna().any():
         fig = px.pie(gastos, values="monto_usd", names="categoria", title="Gastos por categoría")
         st.plotly_chart(fig, use_container_width=True)
 
-    csv = df.to_csv(index=False).encode()
-    st.download_button("Descargar Excel/CSV", csv, "el_eucalito.csv", "text/csv")
-
 with tab2:
-    st.header("Nueva Transacción")
-
-    api_key = st.text_input("API Key Gemini (gemini-1.5-flash)", type="password", value=st.session_state.get("gemini_key", ""))
+    st.header("Ingreso Inteligente con IA")
+    api_key = st.text_input("🔑 API Key Gemini (gemini-1.5-flash)", type="password",
+                            help="Sacala gratis acá → https://aistudio.google.com/app/apikey")
     if api_key:
         st.session_state.gemini_key = api_key
         genai.configure(api_key=api_key)
 
-    texto = st.text_area("Ingreso inteligente (escribí como hablarías)", height=120, placeholder="Ej: Rorro pagó 1600 pesos del camión fosa ayer")
+    texto = st.text_area("Escribí lo que pasó (como si fuera un WhatsApp)", height=150,
+                         placeholder="Ej: Rorro pagó 1600 pesos del camión fosa ayer\nEntraron 450 dólares del alquiler\nLa casa le prestó 100 dólares a Nico")
 
-    if st.button("Procesar con IA", type="primary") and texto and api_key:
-        prompt = f"""
-        Hoy es {date.today()}.
-        Extrae SOLO un JSON válido con estas claves exactas:
-        fecha (YYYY-MM-DD o hoy si no se dice), descripcion, monto (número), moneda ("UYU" o "USD"), categoria (o vacía), tipo ("Ingreso" o "Gasto" o "Préstamo a Casa" o "Préstamo a Primo"), pagado_por (primo exacto o "Airbnb" o "El Eucalito"), beneficiario (primo o vacío)
-        Texto: {texto}
-        """
-        try:
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content(prompt)
-            data = json.loads(response.text)
+    if st.button("🚀 Procesar con IA", type="primary") and texto and api_key:
+        with st.spinner("La IA está leyendo..."):
+            prompt = f"""
+            Convertí esta frase en un JSON perfecto con estas claves exactas:
+            fecha (YYYY-MM-DD, hoy si no dice)
+            descripcion
+            monto (solo número)
+            moneda ("UYU" o "USD")
+            categoria
+            tipo ("Ingreso", "Gasto", "Préstamo a Casa", "Préstamo a Primo")
+            pagado_por
+            beneficiario
 
-            rate = get_rate(data.get("fecha", str(date.today())))
-            monto_usd = data["monto"] if data["moneda"].upper() == "USD" else round(data["monto"] / rate, 4)
+            Frase: {texto}
 
-            trans_sheet.append_row([
-                data.get("fecha", str(date.today())),
-                data["descripcion"],
-                data["monto"],
-                data["moneda"].upper(),
-                monto_usd,
-                data.get("categoria", ""),
-                data["tipo"],
-                data["pagado_por"],
-                data.get("beneficiario", "")
-            ])
-            st.success(f"¡Agregado! Tasa usada: {rate:.2f} UYU/USD")
-            st.rerun()
-        except Exception as e:
-            st.error(f"Error en IA: {e}. Probá de nuevo o usá el formulario manual.")
+            Reglas:
+            - Si un primo pagó algo de la casa → "Gasto", pagado_por: primo, beneficiario: "El Eucalito"
+            - Si entra plata → "Ingreso", pagado_por: "Airbnb", beneficiario: "El Eucalito"
+            - Si un primo presta a la casa → "Préstamo a Casa"
+            - Si la casa presta a un primo → "Préstamo a Primo"
 
-    st.markdown("---")
-    st.subheader("O usá el formulario manual")
-    with st.form("manual"):
-        tipo = st.selectbox("Tipo", ["Ingreso", "Gasto", "Préstamo a Casa", "Préstamo a Primo"])
-        fecha = st.date_input("Fecha", value=date.today())
-        descripcion = st.text_input("Descripción")
-        monto = st.number_input("Monto", min_value=0.0, step=0.01)
-        moneda = st.selectbox("Moneda", ["USD", "UYU"])
-        categoria = st.text_input("Categoría (Mantenimiento, Servicios, Personal, etc.)")
-        pagado_por = st.selectbox("Pagado por", ["Airbnb", "El Eucalito"] + primos)
-        beneficiario = st.selectbox("Beneficiario (solo si préstamo a primo)", [""] + primos)
+            SOLO el JSON, nada más.
+            """
+            try:
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                response = model.generate_content(prompt)
+                data = eval(response.text.strip("`").replace("json", ""))
 
-        if st.form_submit_button("Agregar manual"):
-            rate = get_rate(str(fecha))
-            monto_usd = monto if moneda == "USD" else round(monto / rate, 4)
-            trans_sheet.append_row([str(fecha), descripcion, monto, moneda, monto_usd, categoria, tipo, pagado_por, beneficiario if tipo == "Préstamo a Primo" else ""])
-            st.success(f"¡Agregado! Tasa usada: {rate:.2f}")
-            st.rerun()
+                monto = float(data["monto"])
+                moneda = data["moneda"].upper()
+                monto_usd = round(monto / tasa, 4) if moneda == "UYU" else monto
+
+                trans_sheet.append_row([
+                    data.get("fecha", str(date.today())),
+                    data["descripcion"],
+                    monto,
+                    moneda,
+                    monto_usd,
+                    data.get("categoria", ""),
+                    data["tipo"],
+                    data["pagado_por"],
+                    data.get("beneficiario", "")
+                ])
+                st.success(f"¡Agregado! {data['descripcion']}")
+                st.balloons()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
 
 with tab3:
-    st.header("Reporte por Categorías (solo gastos)")
+    st.header("Gastos por categoría")
     gastos = df[df["tipo"] == "Gasto"]
     if not gastos.empty:
-        for cat in gastos["categoria"].dropna().unique():
+        for cat in sorted(gastos["categoria"].dropna().unique()):
             sub = gastos[gastos["categoria"] == cat]
-            total = sub["monto_usd"].sum()
-            with st.expander(f"{cat} → ${total:,.2f}"):
-                sub_show = sub[["fecha", "descripcion", "monto_usd", "pagado_por"]].copy()
-                sub_show["fecha"] = pd.to_datetime(sub_show["fecha"]).dt.strftime("%d/%m/%Y")
-                sub_show["monto_usd"] = sub_show["monto_usd"].apply(lambda x: f"${x:,.2f}")
-                st.dataframe(sub_show, use_container_width=True, hide_index=True)
-
-with tab4:
-    st.header("Todas las transacciones")
-    if not df.empty:
-        df_show = df.copy()
-        df_show["fecha"] = pd.to_datetime(df_show["fecha"]).dt.strftime("%d/%m/%Y")
-        df_show["monto_usd"] = df_show["monto_usd"].apply(lambda x: f"${x:,.2f}")
-        st.dataframe(df_show[["fecha","descripcion","monto","moneda","monto_usd","categoria","tipo","pagado_por","beneficiario"]], use_container_width=True, hide_index=True)
+            with st.expander(f"{cat} – Total ${sub['monto_usd'].sum():,.2f}"):
+                st.dataframe(sub[["fecha", "descripcion", "monto_usd", "pagado_por"]].sort_values("fecha", ascending=False))
     else:
-        st.info("Aún no hay transacciones")
+        st.info("Aún no hay gastos")
