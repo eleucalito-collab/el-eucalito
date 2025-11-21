@@ -13,7 +13,7 @@ creds = Credentials.from_service_account_info(
 gc = gspread.authorize(creds)
 
 # ID NUEVO DE LA COPIA QUE CREASTE (ESTE FUNCIONA)
-SPREADSHEET_ID = "1FSarYjk_pUTkKCi9R1-S9pmIY2E14yJcqDWHjpONduQ"
+SPREADSHEET_ID = "10tKSl7kulZ70Z95pNe7IBAiHyYV9xYPvEyNvWyIBwlY"
 spreadsheet = gc.open_by_key(SPREADSHEET_ID)
 
 st.success("¡CONECTADO PERFECTO! EL SHEET NUEVO FUNCIONA 100% 🎉🎉🎉")
