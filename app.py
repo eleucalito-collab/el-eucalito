@@ -89,7 +89,7 @@ with tab2:
     api_key = st.text_input("API Key Gemini", type="password", value=st.session_state.get("gemini_key", ""))
     if api_key:
         st.session_state.gemini_key = api_key
-        genai.configure(api_key = api_key
+        genai.configure(api_key=api_key)
 
     texto = st.text_area("Ingreso inteligente", height=120)
 
