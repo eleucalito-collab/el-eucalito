@@ -1,4 +1,4 @@
-import streamlit as st
+Eimport streamlit as st
 import pandas as pd
 import plotly.express as px
 import google.generativeai as genai
@@ -17,7 +17,7 @@ st.title("🌴 Contabilidad Familiar - El Eucalito")
 scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
 gc = gspread.authorize(creds)
-spreadsheet = gc.open("El Eucalito Contabilidad")
+spreadsheet = gc.open("El Eucalito")
 trans_sheet = spreadsheet.worksheet("Transacciones")
 
 # Encabezados
