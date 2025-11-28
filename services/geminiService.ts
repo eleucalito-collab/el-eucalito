@@ -49,8 +49,19 @@ MONEDA:
 - Extrae el monto ORIGINAL. 
 - NO conviertas la moneda. Deja originalCurrency y originalAmount tal cual.
 
-CATEGORÍAS PERMITIDAS:
-'Ingreso', 'Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos', 'Préstamo', 'Pago Reserva', 'Reembolso'.
+CATEGORÍAS Y LÓGICA FINANCIERA (IMPORTANTE):
+1. 'Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos': Gastos normales del negocio.
+2. 'Ingreso', 'Pago Reserva': Dinero que entra por alquileres.
+3. 'Préstamo': EL PRIMO PONE DINERO DE SU BOLSILLO EN LA CAJA (La caja le debe al primo).
+4. 'Adelanto': EL PRIMO SACA DINERO DE LA CAJA (El primo le debe a la caja). Úsalo cuando dicen "sacó plata", "retiró", "agarró de la caja".
+5. 'Reembolso': Devolución de deuda.
+
+CASOS COMPLEJOS (LÓGICA DE VUELTO):
+Si el usuario dice: "Primo sacó X plata y compró Y cosa y se quedó el vuelto":
+DEBES CREAR DOS (2) TRANSACCIONES (Batch):
+1. 'Adelanto': Por el monto TOTAL que sacó de la caja (USD o UYU).
+2. 'Gasto' (Insumos/etc): Por el costo de lo que compró.
+*Esto ajustará automáticamente el saldo: Debe todo el adelanto, pero se le descuenta lo que gastó legítimamente.*
 
 SALIDA JSON:
 OPCIÓN A: UN SOLO MOVIMIENTO

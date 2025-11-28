@@ -20,6 +20,7 @@ const formatUYU = (amount: number) =>
 
 const RADIAN = Math.PI / 180;
 const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+  if (percent < 0.05) return null; // Ocultar etiquetas muy chicas
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
@@ -44,9 +45,15 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       if (t.category === 'Ingreso' || t.category === 'Pago Reserva') {
         totalIncome += t.amountUSD;
       } else if (t.category === 'Préstamo') {
+        // Primo PONE plata -> Caja debe al Primo (Deuda positiva)
         totalIncome += t.amountUSD; 
         totalPendingDebt += t.amountUSD;
       } else if (t.category === 'Reembolso') {
+        // Caja PAGA al Primo -> Gasto de Caja, Deuda baja
+        totalExpense += t.amountUSD;
+        totalPendingDebt -= t.amountUSD;
+      } else if (t.category === 'Adelanto') {
+        // Primo SACA plata -> Gasto de Caja (sale efectivo), Deuda baja (o se vuelve negativa/primo debe)
         totalExpense += t.amountUSD;
         totalPendingDebt -= t.amountUSD;
       } else {
@@ -58,7 +65,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
     
     // Group expenses for chart and accordion
     const expensesByCategory = CATEGORIES
-      .filter(c => c !== 'Ingreso' && c !== 'Préstamo' && c !== 'Pago Reserva' && c !== 'Reembolso')
+      .filter(c => c !== 'Ingreso' && c !== 'Préstamo' && c !== 'Pago Reserva' && c !== 'Reembolso' && c !== 'Adelanto')
       .map(cat => {
         const catTransactions = transactions.filter(t => t.category === cat);
         const sum = catTransactions.reduce((acc, curr) => acc + curr.amountUSD, 0);
@@ -72,7 +79,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
 
   const recentTransactions = [...transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const handleDelete = async (id: string, description: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string, description: string) => {
+    e.stopPropagation(); // IMPORTANTE: Evita abrir/cerrar el acordeón al borrar
     if (window.confirm(`¿Seguro que quieres eliminar "${description}"?`)) {
         await deleteTransaction(id);
     }
@@ -101,8 +109,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
     <div className="p-4 space-y-6 pb-24 relative">
       {/* Edit Modal */}
       {editingTx && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="bg-primary p-4 flex justify-between items-center text-white">
                     <h3 className="font-bold">Editar Movimiento</h3>
                     <button onClick={() => setEditingTx(null)}><X size={20}/></button>
@@ -159,7 +167,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
         </div>
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Deuda (Préstamos)</p>
-          <p className="text-xl font-bold text-pink-500">{formatCurrency(stats.totalPendingDebt)}</p>
+          <p className={`text-xl font-bold ${stats.totalPendingDebt >= 0 ? 'text-pink-500' : 'text-emerald-500'}`}>{formatCurrency(Math.abs(stats.totalPendingDebt))}</p>
+          <span className="text-[9px] text-slate-400 block">{stats.totalPendingDebt >= 0 ? 'Caja debe a Primos' : 'Primos deben a Caja'}</span>
         </div>
       </div>
 
@@ -232,8 +241,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
                         </span>
                       )}
                       <div className="flex gap-2 mt-1">
-                        <button onClick={() => setEditingTx(t)}><Pencil size={12} className="text-slate-400 hover:text-blue-500"/></button>
-                        <button onClick={() => handleDelete(t.id, t.description)}><Trash2 size={12} className="text-slate-400 hover:text-red-500"/></button>
+                        <button onClick={(e) => { e.stopPropagation(); setEditingTx(t); }}><Pencil size={12} className="text-slate-400 hover:text-blue-500"/></button>
+                        <button onClick={(e) => handleDelete(e, t.id, t.description)}><Trash2 size={12} className="text-slate-400 hover:text-red-500"/></button>
                       </div>
                     </div>
                   </div>
@@ -257,11 +266,12 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex flex-col items-end">
-                    <span className={`font-bold ${['Ingreso', 'Préstamo', 'Pago Reserva'].includes(t.category) ? 'text-emerald-600' : 'text-slate-700'}`}>
+                    <span className={`font-bold ${['Ingreso', 'Préstamo', 'Pago Reserva'].includes(t.category) ? 'text-emerald-600' : (t.category === 'Adelanto' ? 'text-slate-500' : 'text-slate-700')}`}>
                     {['Ingreso', 'Préstamo', 'Pago Reserva'].includes(t.category) ? '+' : '-'}{formatCurrency(t.amountUSD)}
                     </span>
                 </div>
-                <button onClick={() => setEditingTx(t)} className="text-slate-300 hover:text-blue-500 p-1"><Pencil size={14} /></button>
+                <button onClick={(e) => { e.stopPropagation(); setEditingTx(t); }} className="text-slate-300 hover:text-blue-500 p-1"><Pencil size={14} /></button>
+                <button onClick={(e) => handleDelete(e, t.id, t.description)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={14} /></button>
               </div>
             </div>
           ))}

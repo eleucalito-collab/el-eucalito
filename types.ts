@@ -9,7 +9,8 @@ export type Category =
   | 'Impuestos' 
   | 'Préstamo' 
   | 'Pago Reserva'
-  | 'Reembolso';
+  | 'Reembolso'
+  | 'Adelanto'; // Nueva categoría para retiros de caja
 
 export interface Transaction {
   id: string;

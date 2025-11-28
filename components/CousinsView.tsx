@@ -22,10 +22,12 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
 
         // 2. EL PRIMO SACA PLATA O TIENE PLATA DE LA CAJA (El primo le debe a la caja)
         // Reembolso: La caja le pagó al primo.
-        if (t.category === 'Reembolso') {
+        // Adelanto: El primo sacó dinero de la caja (Retiro).
+        if (t.category === 'Reembolso' || t.category === 'Adelanto') {
             balance -= t.amountUSD;
         }
-        // Ingreso/Pago Reserva: Si dice 'paidBy: Primo', significa que el primo cobró ese dinero y lo tiene en su bolsillo. Debe ponerlo en la caja.
+        
+        // Ingreso/Pago Reserva: Si dice 'paidBy: Primo', significa que el primo cobró ese dinero y lo tiene en su bolsillo.
         if (['Ingreso', 'Pago Reserva'].includes(t.category)) {
             balance -= t.amountUSD;
         }
@@ -106,8 +108,8 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
       </div>
       <div className="mt-8 p-4 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-1">
         <p><strong>A favor (Verde):</strong> El Airbnb le debe dinero al primo (porque pagó gastos).</p>
-        <p><strong>Debe (Rojo):</strong> El primo tiene dinero del Airbnb o cobró una reserva y no la depositó.</p>
-        <p><strong>Botón Saldar:</strong> Crea automáticamente un movimiento (Ingreso o Reembolso) para dejar la cuenta en 0.</p>
+        <p><strong>Debe (Rojo):</strong> El primo tiene dinero del Airbnb, cobró una reserva no depositada o sacó un Adelanto.</p>
+        <p><strong>Botón Saldar:</strong> Crea automáticamente un movimiento para dejar la cuenta en 0.</p>
       </div>
     </div>
   );
