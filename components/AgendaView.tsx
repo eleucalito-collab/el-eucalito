@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { Booking, Transaction } from '../types';
 import { startOfMonth, endOfMonth, eachDayOfInterval, format, isSameDay, isWithinInterval, parseISO, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, CheckCircle, Clock } from 'lucide-react';
-import { addTransaction } from '../services/firebase';
+import { ChevronLeft, ChevronRight, CheckCircle, Clock, Trash2 } from 'lucide-react';
+import { addTransaction, deleteBooking } from '../services/firebase';
 
 interface AgendaViewProps {
   bookings: Booking[];
@@ -36,12 +36,16 @@ const AgendaView: React.FC<AgendaViewProps> = ({ bookings }) => {
         createdAt: Date.now()
       });
       // 2. Mark booking as paid (This logic would need an update function in firebase.ts, let's assume updateBooking handles it or we re-trigger)
-      // For simplicity in this structure, we would trigger an update. 
-      // *Wait, I added updateBooking in firebase.ts*
       const { updateBooking } = await import('../services/firebase');
       await updateBooking(booking.id, { isPaid: true });
     }
   };
+
+  const handleDeleteBooking = async (id: string, name: string) => {
+      if(window.confirm(`¿Eliminar la reserva de ${name}?`)) {
+          await deleteBooking(id);
+      }
+  }
 
   return (
     <div className="p-4 space-y-4 pb-24 h-full flex flex-col">
@@ -120,7 +124,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ bookings }) => {
           })
           .sort((a,b) => a.startDate.localeCompare(b.startDate))
           .map(b => (
-            <div key={b.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
+            <div key={b.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center group">
               <div>
                 <p className="font-bold text-slate-800">{b.guestName}</p>
                 <p className="text-xs text-slate-500">
@@ -131,15 +135,23 @@ const AgendaView: React.FC<AgendaViewProps> = ({ bookings }) => {
                 </span>
               </div>
               
-              {!b.isFamily && (
+              <div className="flex items-center gap-2">
+                {!b.isFamily && (
+                    <button 
+                    onClick={() => handleConfirmPayment(b)}
+                    disabled={b.isPaid}
+                    className={`p-2 rounded-full ${b.isPaid ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600 hover:bg-amber-200'}`}
+                    >
+                    {b.isPaid ? <CheckCircle size={20} /> : <Clock size={20} />}
+                    </button>
+                )}
                 <button 
-                  onClick={() => handleConfirmPayment(b)}
-                  disabled={b.isPaid}
-                  className={`p-2 rounded-full ${b.isPaid ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600 hover:bg-amber-200'}`}
+                    onClick={() => handleDeleteBooking(b.id, b.guestName)}
+                    className="p-2 text-slate-300 hover:text-red-500 transition-colors"
                 >
-                  {b.isPaid ? <CheckCircle size={20} /> : <Clock size={20} />}
+                    <Trash2 size={20} />
                 </button>
-              )}
+              </div>
             </div>
           ))}
       </div>

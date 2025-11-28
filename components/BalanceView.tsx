@@ -4,6 +4,8 @@ import { Transaction, Booking } from '../types';
 import { CATEGORY_COLORS, CATEGORIES } from '../constants';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Trash2 } from 'lucide-react';
+import { deleteTransaction } from '../services/firebase';
 
 interface BalanceViewProps {
   transactions: Transaction[];
@@ -53,6 +55,12 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
   }, [transactions]);
 
   const recentTransactions = [...transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const handleDelete = async (id: string, description: string) => {
+    if (window.confirm(`¿Seguro que quieres eliminar el movimiento "${description}"?`)) {
+        await deleteTransaction(id);
+    }
+  };
 
   return (
     <div className="p-4 space-y-6 pb-24">
@@ -118,7 +126,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
         <h3 className="p-4 text-sm font-bold text-slate-700 border-b border-slate-100 bg-slate-50">Últimos Movimientos</h3>
         <div className="max-h-96 overflow-y-auto no-scrollbar">
           {recentTransactions.map((t) => (
-            <div key={t.id} className="p-4 border-b border-slate-50 last:border-0 flex justify-between items-center hover:bg-slate-50 transition-colors">
+            <div key={t.id} className="p-4 border-b border-slate-50 last:border-0 flex justify-between items-center hover:bg-slate-50 transition-colors group">
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">{format(new Date(t.date), 'dd MMM yyyy', { locale: es })} • {t.paidBy}</span>
                 <span className="text-sm text-slate-800 font-medium">{t.description}</span>
@@ -126,13 +134,22 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
                   {t.category}
                 </span>
               </div>
-              <div className="flex flex-col items-end">
-                <span className={`font-bold ${['Ingreso', 'Préstamo', 'Pago Reserva'].includes(t.category) ? 'text-emerald-600' : 'text-slate-700'}`}>
-                  {['Ingreso', 'Préstamo', 'Pago Reserva'].includes(t.category) ? '+' : '-'}{formatCurrency(t.amountUSD)}
-                </span>
-                {t.originalCurrency === 'UYU' && (
-                  <span className="text-xs text-slate-400">($U {t.originalAmount})</span>
-                )}
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end">
+                    <span className={`font-bold ${['Ingreso', 'Préstamo', 'Pago Reserva'].includes(t.category) ? 'text-emerald-600' : 'text-slate-700'}`}>
+                    {['Ingreso', 'Préstamo', 'Pago Reserva'].includes(t.category) ? '+' : '-'}{formatCurrency(t.amountUSD)}
+                    </span>
+                    {t.originalCurrency === 'UYU' && (
+                    <span className="text-xs text-slate-400">($U {t.originalAmount})</span>
+                    )}
+                </div>
+                <button 
+                    onClick={() => handleDelete(t.id, t.description)}
+                    className="text-slate-300 hover:text-red-500 transition-colors p-2"
+                    title="Eliminar movimiento"
+                >
+                    <Trash2 size={16} />
+                </button>
               </div>
             </div>
           ))}
