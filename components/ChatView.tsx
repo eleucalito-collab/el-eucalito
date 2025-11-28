@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Mic, Send, Image as ImageIcon, Loader2, Save, X } from 'lucide-react';
-import { processGeminiRequest, AIResponse } from '../services/geminiService';
+import { processGeminiRequest } from '../services/geminiService';
+import { AIResponse } from '../types';
 import { addTransaction, addBooking } from '../services/firebase';
 import { format } from 'date-fns';
 
@@ -46,7 +47,7 @@ const ChatView: React.FC<ChatViewProps> = ({ apiKey }) => {
         const base64String = (reader.result as string).split(',')[1];
         setMessages(prev => [...prev, { role: 'user', content: `[Imagen Subida: ${file.name}]` }]);
         setIsLoading(true);
-        const result = await processGeminiRequest(apiKey, "Analiza esta imagen y extrae los datos.", base64String);
+        const result = await processGeminiRequest(apiKey, "Analiza esta imagen (puede ser tabla, lista o boleta) y extrae todos los movimientos.", base64String);
         setIsLoading(false);
         handleAIResult(result);
     };
@@ -58,7 +59,6 @@ const ChatView: React.FC<ChatViewProps> = ({ apiKey }) => {
       setMessages(prev => [...prev, { role: 'ai', content: `Error: ${result.message}` }]);
     } else {
       setPendingData(result);
-      // Show preview card in chat
     }
   };
 
@@ -72,13 +72,25 @@ const ChatView: React.FC<ChatViewProps> = ({ apiKey }) => {
             isConfirmed: true,
             createdAt: Date.now()
         });
-        setMessages(prev => [...prev, { role: 'ai', content: "✅ Transacción guardada con éxito." }]);
+        setMessages(prev => [...prev, { role: 'ai', content: "✅ Transacción guardada." }]);
+      
+      } else if (pendingData.type === 'batch_transactions') {
+        const list = pendingData.data as any[];
+        for (const item of list) {
+             await addTransaction({
+                ...item,
+                isConfirmed: true,
+                createdAt: Date.now()
+            });
+        }
+        setMessages(prev => [...prev, { role: 'ai', content: `✅ Se guardaron ${list.length} movimientos.` }]);
+
       } else if (pendingData.type === 'booking') {
         await addBooking({
             ...pendingData.data,
             isPaid: false
         });
-        setMessages(prev => [...prev, { role: 'ai', content: "✅ Reserva agendada con éxito." }]);
+        setMessages(prev => [...prev, { role: 'ai', content: "✅ Reserva agendada." }]);
       }
     } catch (e) {
       setMessages(prev => [...prev, { role: 'ai', content: "❌ Error guardando en base de datos." }]);
@@ -91,8 +103,9 @@ const ChatView: React.FC<ChatViewProps> = ({ apiKey }) => {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-sm text-slate-600">
-          Hola, soy la IA de El Eucalito. Dime qué gastos o reservas quieres anotar.
-          <br/><i>Ej: "Pauli gastó 500 pesos en super ayer" o sube una foto de la boleta.</i>
+          Hola, soy la IA de El Eucalito. 
+          <br/>- Escribe gastos o sube fotos de boletas.
+          <br/>- ¡Ahora puedo leer listas largas o tablas de Excel en fotos!
         </div>
         
         {messages.map((m, i) => (
@@ -116,38 +129,58 @@ const ChatView: React.FC<ChatViewProps> = ({ apiKey }) => {
         )}
       </div>
 
-      {/* Confirmation Modal / Overlay for Pending Data */}
+      {/* Confirmation Modal */}
       {pendingData && (
-        <div className="absolute inset-x-0 bottom-24 mx-4 bg-white rounded-2xl shadow-xl border-2 border-primary overflow-hidden animation-slide-up z-20">
-          <div className="bg-primary px-4 py-2 flex justify-between items-center">
-            <h3 className="text-white font-bold text-sm">Verifica los datos</h3>
+        <div className="absolute inset-x-0 bottom-24 mx-4 bg-white rounded-2xl shadow-xl border-2 border-primary overflow-hidden animation-slide-up z-20 max-h-[60vh] flex flex-col">
+          <div className="bg-primary px-4 py-2 flex justify-between items-center shrink-0">
+            <h3 className="text-white font-bold text-sm">
+                {pendingData.type === 'batch_transactions' ? 'Lista Detectada' : 'Verificar Datos'}
+            </h3>
             <button onClick={() => setPendingData(null)} className="text-white/80 hover:text-white"><X size={18}/></button>
           </div>
-          <div className="p-4 text-sm text-slate-700 space-y-2">
+          
+          <div className="p-4 text-sm text-slate-700 space-y-2 overflow-y-auto">
             {pendingData.type === 'transaction' && (
                 <>
-                    <p><strong>Tipo:</strong> Gasto/Ingreso</p>
-                    <p><strong>Descripción:</strong> {pendingData.data.description}</p>
+                    <p><strong>Gasto:</strong> {pendingData.data.description}</p>
                     <p><strong>Monto:</strong> USD {pendingData.data.amountUSD}</p>
-                    <p><strong>Quién:</strong> {pendingData.data.paidBy}</p>
-                    <p><strong>Fecha:</strong> {pendingData.data.date}</p>
-                    <p><strong>Categoría:</strong> {pendingData.data.category}</p>
+                    <p><strong>Quién:</strong> {pendingData.data.paidBy} ({pendingData.data.category})</p>
                 </>
             )}
+            
+            {pendingData.type === 'batch_transactions' && (
+                <div className="space-y-3">
+                    <p className="text-xs text-slate-500">Se encontraron {(pendingData.data as any[]).length} movimientos:</p>
+                    {(pendingData.data as any[]).map((t: any, idx: number) => (
+                        <div key={idx} className="border-b border-slate-100 pb-2 last:border-0">
+                            <div className="flex justify-between font-bold">
+                                <span>{t.description}</span>
+                                <span>USD {t.amountUSD}</span>
+                            </div>
+                            <div className="text-xs text-slate-500 flex justify-between">
+                                <span>{t.date} • {t.paidBy}</span>
+                                <span>{t.category}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {pendingData.type === 'booking' && (
                 <>
-                    <p><strong>Tipo:</strong> Reserva</p>
-                    <p><strong>Huésped:</strong> {pendingData.data.guestName}</p>
+                    <p><strong>Reserva:</strong> {pendingData.data.guestName}</p>
                     <p><strong>Fechas:</strong> {pendingData.data.startDate} al {pendingData.data.endDate}</p>
                     <p><strong>Precio:</strong> USD {pendingData.data.totalPriceUSD}</p>
-                    <p><strong>Tipo:</strong> {pendingData.data.isFamily ? "Familia (Sin costo)" : "Airbnb"}</p>
                 </>
             )}
+          </div>
+            
+          <div className="p-4 pt-0 shrink-0">
             <button 
                 onClick={confirmAction}
-                className="w-full mt-2 bg-primary text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all"
+                className="w-full bg-primary text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all"
             >
-                <Save size={18} /> Confirmar y Guardar
+                <Save size={18} /> Confirmar Todo
             </button>
           </div>
         </div>
@@ -176,11 +209,6 @@ const ChatView: React.FC<ChatViewProps> = ({ apiKey }) => {
                 className="w-full bg-slate-100 text-slate-800 rounded-full py-3 px-4 outline-none focus:ring-2 focus:ring-primary/50"
             />
          </div>
-
-         {/* Mic button (visual only for this demo, web speech api is complex to perfect in one-shot) */}
-         <button className="p-3 text-slate-400 hover:text-slate-600 rounded-full">
-            <Mic size={24} />
-         </button>
 
          <button 
             onClick={handleSend}

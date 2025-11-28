@@ -20,19 +20,21 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
   const stats = useMemo(() => {
     let totalIncome = 0;
     let totalExpense = 0;
-    let totalPendingDebt = 0; // Money borrowed
+    let totalPendingDebt = 0; // Deuda que la CAJA debe (dinero prestado por primos)
     
-    // Calculate from transactions
     transactions.forEach(t => {
       if (t.category === 'Ingreso' || t.category === 'Pago Reserva') {
         totalIncome += t.amountUSD;
       } else if (t.category === 'Préstamo') {
-        // Complex logic: assuming Préstamo means money OUT from box to someone, or IN?
-        // Let's assume Préstamo means "Ingreso" (Primo lends to Box) for simplicity based on prompt "Pablo prestó 1000"
-        // Wait, "Pablo prestó 1000 al Airbnb" -> Airbnb receives money (Liability).
-        // Let's treat Préstamo as a separate liability tracker, but adds to Cash.
+        // Préstamo significa que un primo puso plata en la caja para salvar las papas.
+        // Entra dinero a la caja (Income) pero genera deuda.
         totalIncome += t.amountUSD; 
         totalPendingDebt += t.amountUSD;
+      } else if (t.category === 'Reembolso') {
+        // La caja paga a un primo. Sale dinero.
+        // Esto reduce la deuda con el primo, y reduce la caja.
+        totalExpense += t.amountUSD;
+        totalPendingDebt -= t.amountUSD; // Asumimos que Reembolso paga deuda vieja
       } else {
         totalExpense += t.amountUSD;
       }

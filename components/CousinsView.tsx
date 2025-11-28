@@ -1,6 +1,7 @@
 import React from 'react';
 import { Transaction } from '../types';
 import { COUSINS } from '../constants';
+import { addTransaction } from '../services/firebase';
 
 interface CousinsViewProps {
   transactions: Transaction[];
@@ -9,37 +10,62 @@ interface CousinsViewProps {
 const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
   
   const getCousinBalance = (name: string) => {
-    // Logic: 
-    // If Cousin Paid Expense -> Airbnb owes Cousin (+ Balance for Cousin)
-    // If Cousin Loaned Money -> Airbnb owes Cousin (+ Balance)
-    // If Cousin borrowed money -> Cousin owes Airbnb (- Balance)
-    // If Cousin generated Income (unlikely unless they collected cash) -> depends on logic.
-    
-    // Simplification:
-    // Expense paid by Cousin = Credit
-    // Loan given by Cousin = Credit
-    // Anything else? Maybe they collect cash from guest? Assuming no for now.
-
     let balance = 0;
     transactions.forEach(t => {
-      // Check if this transaction is associated with the cousin
-      // We need to match name or aliases. But data is normalized by Gemini to main name usually.
+      // Normalizamos: paidBy debería ser el nombre del primo.
       if (t.paidBy.toLowerCase() === name.toLowerCase()) {
-        if (t.category === 'Ingreso' || t.category === 'Pago Reserva') {
-             // Cousin collected money? Or Cousin paid into box? 
-             // "Pablo prestó 1000" -> Category Loan.
-             // Usually cousins pay expenses.
-        }
         
-        if (['Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos'].includes(t.category)) {
+        // 1. EL PRIMO PONE PLATA (La caja le debe al primo)
+        if (['Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos', 'Préstamo'].includes(t.category)) {
            balance += t.amountUSD;
         }
-        if (t.category === 'Préstamo') {
-            balance += t.amountUSD;
+
+        // 2. EL PRIMO SACA PLATA O TIENE PLATA DE LA CAJA (El primo le debe a la caja)
+        // Reembolso: La caja le pagó al primo.
+        if (t.category === 'Reembolso') {
+            balance -= t.amountUSD;
+        }
+        // Ingreso/Pago Reserva: Si dice 'paidBy: Primo', significa que el primo cobró ese dinero y lo tiene en su bolsillo. Debe ponerlo en la caja.
+        if (['Ingreso', 'Pago Reserva'].includes(t.category)) {
+            balance -= t.amountUSD;
         }
       }
     });
     return balance;
+  };
+
+  const handleSettle = async (name: string, balance: number) => {
+    if (balance === 0) return;
+
+    const absBalance = Math.abs(balance);
+    let message = "";
+    let category = "";
+    let description = "";
+
+    if (balance > 0) {
+        // La Caja DEBE al Primo. La caja paga.
+        message = `¿Confirmar que se le pagaron USD ${absBalance} a ${name} para saldar la deuda?`;
+        category = "Reembolso";
+        description = `Reembolso total a ${name}`;
+    } else {
+        // El Primo DEBE a la Caja. El primo paga.
+        message = `¿Confirmar que ${name} entregó USD ${absBalance} a la caja?`;
+        category = "Ingreso";
+        description = `Saldo de deuda de ${name}`;
+    }
+
+    if (window.confirm(message)) {
+        await addTransaction({
+            date: new Date().toISOString().split('T')[0],
+            description: description,
+            amountUSD: absBalance,
+            originalCurrency: 'USD',
+            category: category as any,
+            paidBy: name,
+            isConfirmed: true,
+            createdAt: Date.now()
+        });
+    }
   };
 
   return (
@@ -57,21 +83,31 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
                 <div>
                   <p className="font-bold text-slate-800">{cousin.name}</p>
                   <p className="text-xs text-slate-400">
-                    {balance > 0 ? 'A favor' : 'Al día'}
+                    {balance === 0 ? 'Al día' : (balance > 0 ? 'A favor (Caja debe)' : 'Debe (Caja cobra)')}
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <span className={`text-lg font-bold ${balance > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                  USD {balance.toFixed(0)}
+              <div className="flex flex-col items-end gap-2">
+                <span className={`text-lg font-bold ${balance > 0 ? 'text-emerald-600' : (balance < 0 ? 'text-red-500' : 'text-slate-400')}`}>
+                  {balance === 0 ? '-' : `USD ${Math.abs(balance).toFixed(0)}`}
                 </span>
+                {balance !== 0 && (
+                    <button 
+                        onClick={() => handleSettle(cousin.name, balance)}
+                        className="text-xs px-3 py-1 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors"
+                    >
+                        Saldar
+                    </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
-      <div className="mt-8 p-4 bg-blue-50 rounded-xl text-xs text-blue-700">
-        Nota: El balance "A Favor" aumenta cuando un primo paga un gasto de la casa o presta dinero.
+      <div className="mt-8 p-4 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-1">
+        <p><strong>A favor (Verde):</strong> El Airbnb le debe dinero al primo (porque pagó gastos).</p>
+        <p><strong>Debe (Rojo):</strong> El primo tiene dinero del Airbnb o cobró una reserva y no la depositó.</p>
+        <p><strong>Botón Saldar:</strong> Crea automáticamente un movimiento (Ingreso o Reembolso) para dejar la cuenta en 0.</p>
       </div>
     </div>
   );

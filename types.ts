@@ -8,7 +8,8 @@ export type Category =
   | 'Cuentas' 
   | 'Impuestos' 
   | 'Préstamo' 
-  | 'Pago Reserva';
+  | 'Pago Reserva'
+  | 'Reembolso';
 
 export interface Transaction {
   id: string;
@@ -40,6 +41,12 @@ export interface CousinProfile {
 }
 
 export type Tab = 'balance' | 'agenda' | 'chat' | 'cousins' | 'settings';
+
+export interface AIResponse {
+  type: 'transaction' | 'booking' | 'batch_transactions' | 'error';
+  data?: any;
+  message?: string;
+}
 
 export interface AppState {
   transactions: Transaction[];

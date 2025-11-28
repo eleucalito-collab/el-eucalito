@@ -1,11 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { COUSINS, FALLBACK_UYU_TO_USD } from "../constants";
-
-export interface AIResponse {
-  type: 'transaction' | 'booking' | 'error';
-  data?: any;
-  message?: string;
-}
+import { AIResponse } from "../types";
 
 // Helper to get fresh rate
 const getExchangeRate = async (): Promise<number> => {
@@ -21,7 +16,7 @@ const getExchangeRate = async (): Promise<number> => {
 
 const buildSystemInstruction = (rate: number) => `
 Actúa como un asistente contable inteligente para "El Eucalito", un Airbnb familiar en Uruguay.
-Tu objetivo es interpretar texto natural (o transcripción de voz) e imágenes de boletas para crear registros estructurados.
+Tu objetivo es interpretar texto natural (o transcripción de voz) e imágenes (boletas, tablas de excel, listas manuales) para crear registros estructurados.
 
 USUARIOS (Primos): ${COUSINS.map(c => `${c.name} (Alias: ${c.aliases.join(', ')})`).join('; ')}.
 Si detectas un nombre o alias, normalízalo al nombre principal. Si no detectas usuario, usa "Desconocido".
@@ -33,42 +28,60 @@ MONEDA Y CONVERSIÓN:
 - Retorna siempre el monto en USD final.
 
 CATEGORÍAS PERMITIDAS:
-'Ingreso', 'Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos', 'Préstamo', 'Pago Reserva'.
+'Ingreso', 'Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos', 'Préstamo', 'Pago Reserva', 'Reembolso' (usar Reembolso solo si se explícita devolución de deuda).
 
 SALIDA JSON:
 Debes responder SIEMPRE en formato JSON puro, sin markdown.
 
-SI ES GASTO/INGRESO/PRÉSTAMO:
+OPCIÓN A: UN SOLO MOVIMIENTO
 {
   "type": "transaction",
   "data": {
-    "date": "YYYY-MM-DD", (Usa la fecha mencionada o la fecha de hoy si dice "hoy", ayer si dice "ayer")
+    "date": "YYYY-MM-DD", 
     "description": "Breve descripción",
     "amountUSD": number,
-    "originalAmount": number, (Monto original dicho por usuario)
+    "originalAmount": number,
     "originalCurrency": "UYU" | "USD",
-    "category": "Una de las categorías permitidas",
-    "paidBy": "Nombre del primo o 'Cliente'"
+    "category": "Categoría",
+    "paidBy": "Nombre del primo"
   }
 }
 
-SI ES UNA RESERVA (AGENDA):
+OPCIÓN B: UNA LISTA DE MOVIMIENTOS (Para tablas, Excel o listas largas)
+Si detectas múltiples ítems en una imagen o texto, usa este formato.
+{
+  "type": "batch_transactions",
+  "data": [
+      {
+        "date": "YYYY-MM-DD", 
+        "description": "Item 1",
+        "amountUSD": number,
+        "originalAmount": number,
+        "originalCurrency": "UYU" | "USD",
+        "category": "Categoría",
+        "paidBy": "Nombre del primo"
+      },
+      ...
+  ]
+}
+
+OPCIÓN C: RESERVA (AGENDA)
 {
   "type": "booking",
   "data": {
     "guestName": "Nombre",
     "startDate": "YYYY-MM-DD",
     "endDate": "YYYY-MM-DD",
-    "totalPriceUSD": number, (0 si es familia/amigo y no pagan)
-    "isFamily": boolean, (true si es primo o amigo gratis, false si es cliente Airbnb)
+    "totalPriceUSD": number,
+    "isFamily": boolean,
     "notes": "string"
   }
 }
 
-SI ES UN MENSAJE IRRELEVANTE O ERROR:
+SI ES UN ERROR:
 {
   "type": "error",
-  "message": "Explicación del error"
+  "message": "Explicación"
 }
 `;
 
