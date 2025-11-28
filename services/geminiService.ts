@@ -61,11 +61,16 @@ CATEGORÍAS Y LÓGICA FINANCIERA:
 6. 'Donación': Regalo.
 
 CASOS COMPLEJOS (BATCH):
-Si el usuario dice: "Primo sacó X plata y compró Y cosa y se quedó el vuelto":
-CREAR DOS (2) TRANSACCIONES:
-1. 'Adelanto': Por el monto TOTAL que sacó (paidBy: NOMBRE DEL PRIMO).
-2. 'Gasto' (Insumos/etc): Por el costo de lo que compró (paidBy: NOMBRE DEL PRIMO).
-*El sistema matemático ajustará el saldo automáticamente.*
+A. "Primo sacó plata y compró algo y se quedó el vuelto":
+   CREAR DOS TRANSACCIONES:
+   1. 'Adelanto' (Total sacado, paidBy: NOMBRE DEL PRIMO).
+   2. 'Gasto' (Insumos/etc) (Costo de lo comprado, paidBy: NOMBRE DEL PRIMO).
+   *El sistema matemático ajustará el saldo automáticamente.*
+
+B. "Primo COMPRÓ algo y lo REGALÓ/DONÓ" (Ej: Compró cortinas y las regaló):
+   Para que la matemática cuadre (Caja neutra, Deuda 0):
+   1. 'Donación' (Monto del item, paidBy: PRIMO). -> Simula que el primo metió la plata a la caja.
+   2. 'Gasto' (Monto del item, paidBy: 'Caja'). -> Simula que la caja pagó el item con esa plata.
 
 SALIDA JSON:
 OPCIÓN A: UN SOLO MOVIMIENTO

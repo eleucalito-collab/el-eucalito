@@ -102,16 +102,10 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       }
 
       if (t.category === 'Donación') {
-          // Caso complejo:
-          // 1. Si es plata regalada a la caja: Caja sube. Deuda neutra.
-          // 2. Si es "Compró X y lo donó": El paso A (Gasto) subió la deuda. Aquí la bajamos para anularla.
-          if (isCousin) {
-             // Asumimos que si un primo dona, está perdonando una deuda o regalando algo comprado
-             totalPendingDebt -= t.amountUSD; 
-          } else {
-             // Donación externa a la caja
-             currentBox += t.amountUSD;
-          }
+          // Si entra una donación, siempre suma a la caja (sea efectivo o valor).
+          // Si es "Compra Donada", la IA genera un Gasto (Caja) que neutraliza este aumento.
+          currentBox += t.amountUSD;
+          // La Donación NO genera deuda (es regalo), por eso no sumamos a totalPendingDebt.
       }
     });
 
@@ -230,8 +224,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       </div>
 
       {/* Chart */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center">
-         <h3 className="text-sm font-bold text-slate-700 mb-2 w-full">Distribución de Gastos</h3>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+         <h3 className="text-sm font-bold text-slate-700 mb-2 w-full text-center">Distribución de Gastos</h3>
          <div style={{ width: '100%', height: 180 }}>
            {stats.expensesByCategory.length > 0 ? (
                <ResponsiveContainer width="100%" height="100%">
