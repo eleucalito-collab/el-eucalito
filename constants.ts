@@ -16,7 +16,7 @@ export const COUSINS: CousinProfile[] = [
 ];
 
 export const CATEGORIES: Category[] = [
-  'Ingreso', 'Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos', 'Préstamo', 'Pago Reserva', 'Reembolso', 'Adelanto'
+  'Ingreso', 'Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos', 'Préstamo', 'Pago Reserva', 'Reembolso', 'Adelanto', 'Donación'
 ];
 
 export const CATEGORY_COLORS: Record<Category, string> = {
@@ -30,6 +30,7 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   'Préstamo': '#ec4899', // Pink
   'Reembolso': '#06b6d4', // Cyan
   'Adelanto': '#64748b', // Slate (Gris Azulado)
+  'Donación': '#db2777', // Pink-600
 };
 
 // Default exchange rate fallback if API fails

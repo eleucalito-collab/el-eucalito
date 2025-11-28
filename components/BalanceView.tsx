@@ -20,7 +20,7 @@ const formatUYU = (amount: number) =>
 
 const RADIAN = Math.PI / 180;
 const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-  if (percent < 0.05) return null; // Ocultar etiquetas muy chicas
+  if (percent < 0.05) return null; 
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
@@ -37,50 +37,101 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   const stats = useMemo(() => {
-    let totalIncome = 0;
-    let totalExpense = 0;
-    let totalPendingDebt = 0;
+    let businessIncome = 0; // Airbnb
+    let contributions = 0; // Préstamos + Donaciones
+    let totalExpense = 0; // Gastos contables (no necesariamente de caja)
+    
+    // Variables de Estado Financiero Real
+    let currentBox = 0; // Dinero físico en caja
+    let totalPendingDebt = 0; // Cuánto debe el Eucalito a los Primos (Suma de saldos)
     
     transactions.forEach(t => {
+      const isCousin = !['Caja', 'El Eucalito', 'Airbnb', 'Cliente'].includes(t.paidBy);
+
+      // --- 1. CONTABILIDAD GENERAL (Visualización) ---
       if (t.category === 'Ingreso' || t.category === 'Pago Reserva') {
-        totalIncome += t.amountUSD;
-      } else if (t.category === 'Préstamo') {
-        // Primo PONE plata -> Caja debe al Primo (Deuda positiva)
-        totalIncome += t.amountUSD; 
-        totalPendingDebt += t.amountUSD;
-      } else if (t.category === 'Reembolso') {
-        // Caja PAGA al Primo -> Gasto de Caja, Deuda baja
+        businessIncome += t.amountUSD;
+      } else if (t.category === 'Préstamo' || t.category === 'Donación') {
+        contributions += t.amountUSD;
+      } else if (!['Reembolso', 'Adelanto'].includes(t.category)) {
+        // Gastos operativos (Insumos, etc)
         totalExpense += t.amountUSD;
-        totalPendingDebt -= t.amountUSD;
-      } else if (t.category === 'Adelanto') {
-        // Primo SACA plata -> Gasto de Caja (sale efectivo), Deuda baja (o se vuelve negativa/primo debe)
-        totalExpense += t.amountUSD;
-        totalPendingDebt -= t.amountUSD;
-      } else {
-        totalExpense += t.amountUSD;
+      }
+
+      // --- 2. LÓGICA DE CAJA Y DEUDA (Precisión) ---
+      
+      // A. GASTOS (Insumos, Mant, etc)
+      if (!['Ingreso', 'Pago Reserva', 'Préstamo', 'Adelanto', 'Reembolso', 'Donación'].includes(t.category)) {
+          if (isCousin) {
+              // Pagó un primo con su plata -> La deuda sube (Caja debe al primo). La Caja física NO se mueve.
+              totalPendingDebt += t.amountUSD;
+          } else {
+              // Pagó la Caja -> La Caja baja. La deuda no cambia.
+              currentBox -= t.amountUSD;
+          }
+      }
+
+      // B. INGRESOS (Alquileres)
+      if (['Ingreso', 'Pago Reserva'].includes(t.category)) {
+          if (isCousin) {
+              // Lo cobró un primo y se lo quedó -> La deuda BAJA (El primo le debe a la caja / se cobra a cuenta). Caja no se mueve.
+              totalPendingDebt -= t.amountUSD;
+          } else {
+              // Entró a la Caja directo -> Caja sube.
+              currentBox += t.amountUSD;
+          }
+      }
+
+      // C. MOVIMIENTOS FINANCIEROS
+      if (t.category === 'Préstamo') {
+          // Primo pone plata en la caja -> Caja sube. Deuda sube.
+          currentBox += t.amountUSD;
+          totalPendingDebt += t.amountUSD;
+      }
+
+      if (t.category === 'Adelanto') {
+          // Primo saca plata de la caja -> Caja baja. Deuda baja (o se hace negativa).
+          currentBox -= t.amountUSD;
+          totalPendingDebt -= t.amountUSD;
+      }
+
+      if (t.category === 'Reembolso') {
+          // Caja paga deuda al primo -> Caja baja. Deuda baja.
+          currentBox -= t.amountUSD;
+          totalPendingDebt -= t.amountUSD;
+      }
+
+      if (t.category === 'Donación') {
+          // Caso complejo:
+          // 1. Si es plata regalada a la caja: Caja sube. Deuda neutra.
+          // 2. Si es "Compró X y lo donó": El paso A (Gasto) subió la deuda. Aquí la bajamos para anularla.
+          if (isCousin) {
+             // Asumimos que si un primo dona, está perdonando una deuda o regalando algo comprado
+             totalPendingDebt -= t.amountUSD; 
+          } else {
+             // Donación externa a la caja
+             currentBox += t.amountUSD;
+          }
       }
     });
 
-    const currentBox = totalIncome - totalExpense;
-    
-    // Group expenses for chart and accordion
     const expensesByCategory = CATEGORIES
-      .filter(c => c !== 'Ingreso' && c !== 'Préstamo' && c !== 'Pago Reserva' && c !== 'Reembolso' && c !== 'Adelanto')
+      .filter(c => c !== 'Ingreso' && c !== 'Préstamo' && c !== 'Pago Reserva' && c !== 'Reembolso' && c !== 'Adelanto' && c !== 'Donación')
       .map(cat => {
         const catTransactions = transactions.filter(t => t.category === cat);
         const sum = catTransactions.reduce((acc, curr) => acc + curr.amountUSD, 0);
         return { name: cat, value: sum, transactions: catTransactions };
       })
       .filter(i => i.value > 0)
-      .sort((a, b) => b.value - a.value); // Sort by highest expense
+      .sort((a, b) => b.value - a.value);
 
-    return { totalIncome, totalExpense, totalPendingDebt, currentBox, expensesByCategory };
+    return { businessIncome, contributions, totalExpense, totalPendingDebt, currentBox, expensesByCategory };
   }, [transactions]);
 
   const recentTransactions = [...transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const handleDelete = async (e: React.MouseEvent, id: string, description: string) => {
-    e.stopPropagation(); // IMPORTANTE: Evita abrir/cerrar el acordeón al borrar
+    e.stopPropagation();
     if (window.confirm(`¿Seguro que quieres eliminar "${description}"?`)) {
         await deleteTransaction(id);
     }
@@ -148,7 +199,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
         </div>
       )}
 
-      {/* Cards Grid - Updated with more stats */}
+      {/* Cards Grid */}
       <div className="grid grid-cols-2 gap-3">
         {/* Row 1 */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
@@ -156,23 +207,29 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
           <p className={`text-xl font-bold ${stats.currentBox >= 0 ? 'text-primary' : 'text-red-500'}`}>{formatCurrency(stats.currentBox)}</p>
         </div>
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Ingresos Tot.</p>
-          <p className="text-xl font-bold text-emerald-600">{formatCurrency(stats.totalIncome)}</p>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Gastos Totales</p>
+          <p className="text-xl font-bold text-slate-700">{formatCurrency(stats.totalExpense)}</p>
         </div>
         
         {/* Row 2 */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Gastos Tot.</p>
-          <p className="text-xl font-bold text-slate-700">{formatCurrency(stats.totalExpense)}</p>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Ingresos</p>
+          <p className="text-xl font-bold text-emerald-600">{formatCurrency(stats.businessIncome)}</p>
+          <span className="text-[9px] text-slate-400">Reservas / Alquiler</span>
         </div>
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Deuda (Préstamos)</p>
-          <p className={`text-xl font-bold ${stats.totalPendingDebt >= 0 ? 'text-pink-500' : 'text-emerald-500'}`}>{formatCurrency(Math.abs(stats.totalPendingDebt))}</p>
-          <span className="text-[9px] text-slate-400 block">{stats.totalPendingDebt >= 0 ? 'Caja debe a Primos' : 'Primos deben a Caja'}</span>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Aportes Primos</p>
+          <div className="flex flex-col mt-1">
+             <p className="text-xl font-bold text-purple-600 leading-tight">{formatCurrency(stats.contributions)}</p>
+             <span className={`text-[10px] font-bold ${stats.totalPendingDebt >= 0 ? 'text-pink-500' : 'text-emerald-500'}`}>
+                Deuda: {formatCurrency(Math.abs(stats.totalPendingDebt))}
+             </span>
+          </div>
+          <span className="text-[9px] text-slate-400 mt-1 block">Préstamos + Donaciones</span>
         </div>
       </div>
 
-      {/* Chart - Smaller Size */}
+      {/* Chart */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center">
          <h3 className="text-sm font-bold text-slate-700 mb-2 w-full">Distribución de Gastos</h3>
          <div style={{ width: '100%', height: 180 }}>
@@ -266,8 +323,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex flex-col items-end">
-                    <span className={`font-bold ${['Ingreso', 'Préstamo', 'Pago Reserva'].includes(t.category) ? 'text-emerald-600' : (t.category === 'Adelanto' ? 'text-slate-500' : 'text-slate-700')}`}>
-                    {['Ingreso', 'Préstamo', 'Pago Reserva'].includes(t.category) ? '+' : '-'}{formatCurrency(t.amountUSD)}
+                    <span className={`font-bold ${['Ingreso', 'Préstamo', 'Pago Reserva', 'Donación'].includes(t.category) ? 'text-emerald-600' : (t.category === 'Adelanto' ? 'text-slate-500' : 'text-slate-700')}`}>
+                    {['Ingreso', 'Préstamo', 'Pago Reserva', 'Donación'].includes(t.category) ? '+' : '-'}{formatCurrency(t.amountUSD)}
                     </span>
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); setEditingTx(t); }} className="text-slate-300 hover:text-blue-500 p-1"><Pencil size={14} /></button>
