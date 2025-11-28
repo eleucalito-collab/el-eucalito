@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Calendar, PlusCircle, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, Calendar, PlusCircle, Users, Settings, Trees } from 'lucide-react';
 import { Tab, Transaction, Booking } from './types';
 import { subscribeToTransactions, subscribeToBookings, subscribeToGlobalSettings, isFirebaseConfigured } from './services/firebase';
 import BalanceView from './components/BalanceView';
@@ -60,7 +60,9 @@ const App: React.FC = () => {
         {/* Dynamic Header based on Tab */}
         <header className="bg-white p-4 border-b border-slate-100 sticky top-0 z-10 flex justify-between items-center">
             <h1 className="text-xl font-bold text-primary flex items-center gap-2">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Eucalyptus_tereticornis_flowers%2C_capsules%2C_buds_and_foliage.jpg/640px-Eucalyptus_tereticornis_flowers%2C_capsules%2C_buds_and_foliage.jpg" className="w-8 h-8 rounded-full object-cover shadow-sm" alt="leaf" />
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <Trees size={20} />
+                </div>
                 El Eucalito
             </h1>
             <div className="flex items-center gap-2">

@@ -122,6 +122,19 @@ export const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
   await addDoc(collection(db, 'transactions'), transaction);
 };
 
+export const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
+  if (!db) {
+      const local = JSON.parse(localStorage.getItem('local_transactions') || '[]');
+      const index = local.findIndex((t: Transaction) => t.id === id);
+      if (index !== -1) {
+          local[index] = { ...local[index], ...updates };
+          localStorage.setItem('local_transactions', JSON.stringify(local));
+      }
+      return;
+  }
+  await updateDoc(doc(db, 'transactions', id), updates);
+};
+
 export const deleteTransaction = async (id: string) => {
   if (!db) {
     const local = JSON.parse(localStorage.getItem('local_transactions') || '[]');

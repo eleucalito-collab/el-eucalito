@@ -13,11 +13,12 @@ export type Category =
 
 export interface Transaction {
   id: string;
-  date: string; // ISO string
+  date: string; // ISO string YYYY-MM-DD
   description: string;
   amountUSD: number;
   originalAmount?: number; // If paid in UYU
   originalCurrency: Currency;
+  exchangeRate?: number; // The rate used for conversion
   category: Category;
   paidBy: string; // Cousin Name or 'Cliente'
   isConfirmed: boolean;
