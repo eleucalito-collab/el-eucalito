@@ -46,7 +46,9 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
     let totalPendingDebt = 0; // Cuánto debe el Eucalito a los Primos (Suma de saldos)
     
     transactions.forEach(t => {
-      const isCousin = !['Caja', 'El Eucalito', 'Airbnb', 'Cliente'].includes(t.paidBy);
+      // Definimos quién es un "Primo" real (que genera deuda individual).
+      // "Familia" se considera externo (como Cliente) para efectos de deuda individual.
+      const isCousin = !['Caja', 'El Eucalito', 'Airbnb', 'Cliente', 'Familia'].includes(t.paidBy);
 
       // --- 1. CONTABILIDAD GENERAL (Visualización) ---
       if (t.category === 'Ingreso' || t.category === 'Pago Reserva') {
@@ -66,15 +68,17 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
               // Pagó un primo con su plata -> La deuda sube (Caja debe al primo). La Caja física NO se mueve.
               totalPendingDebt += t.amountUSD;
           } else {
-              // Pagó la Caja -> La Caja baja. La deuda no cambia.
-              currentBox -= t.amountUSD;
+              // Pagó la Caja (o Familia/Cliente asumiendo regalo) -> La Caja baja si paga 'Caja'.
+              if (t.paidBy === 'Caja') {
+                  currentBox -= t.amountUSD;
+              }
           }
       }
 
       // B. INGRESOS (Alquileres)
       if (['Ingreso', 'Pago Reserva'].includes(t.category)) {
           if (isCousin) {
-              // Lo cobró un primo y se lo quedó -> La deuda BAJA (El primo le debe a la caja / se cobra a cuenta). Caja no se mueve.
+              // Lo cobró un primo y se lo quedó -> La deuda BAJA (El primo le debe a la caja). Caja no se mueve.
               totalPendingDebt -= t.amountUSD;
           } else {
               // Entró a la Caja directo -> Caja sube.
@@ -90,7 +94,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       }
 
       if (t.category === 'Adelanto') {
-          // Primo saca plata de la caja -> Caja baja. Deuda baja (o se hace negativa).
+          // Primo saca plata de la caja -> Caja baja. Deuda baja.
           currentBox -= t.amountUSD;
           totalPendingDebt -= t.amountUSD;
       }
@@ -102,10 +106,16 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       }
 
       if (t.category === 'Donación') {
-          // Si entra una donación, siempre suma a la caja (sea efectivo o valor).
-          // Si es "Compra Donada", la IA genera un Gasto (Caja) que neutraliza este aumento.
-          currentBox += t.amountUSD;
-          // La Donación NO genera deuda (es regalo), por eso no sumamos a totalPendingDebt.
+          // 1. Donación de "Familia" o "Cliente": Entra dinero a caja. NO afecta deuda.
+          if (!isCousin) {
+              currentBox += t.amountUSD;
+          } 
+          // 2. Donación de Primo (Compra regalada):
+          // En la IA esto se modela como "Donación (Primo)" + "Gasto (Caja)".
+          // Aquí: "Donación (Primo)" -> No toca caja. Baja Deuda (porque asumimos que el sistema deuda sumó algo previamente, o simplemente es un aporte a fondo perdido).
+          else {
+              totalPendingDebt -= t.amountUSD; 
+          }
       }
     });
 
@@ -153,7 +163,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
   const getAmountColor = (category: Category) => {
       if (['Ingreso', 'Préstamo', 'Pago Reserva', 'Donación'].includes(category)) return 'text-emerald-600';
       if (category === 'Adelanto') return 'text-slate-500';
-      if (category === 'Reembolso') return 'text-cyan-600'; // Color distintivo para pagos de deuda
+      if (category === 'Reembolso') return 'text-cyan-600'; 
       return 'text-slate-700';
   };
 

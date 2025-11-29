@@ -167,6 +167,7 @@ const ChatView: React.FC<ChatViewProps> = ({ apiKey }) => {
                     >
                         <option value="" disabled>Elegir...</option>
                         {COUSINS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                        <option value="Familia">Familia</option>
                         <option value="Caja">Caja</option>
                         <option value="Cliente">Cliente</option>
                     </select>
@@ -188,6 +189,7 @@ const ChatView: React.FC<ChatViewProps> = ({ apiKey }) => {
                                 className="text-xs border border-slate-200 rounded px-1 py-0.5 bg-slate-50 max-w-[100px]"
                             >
                                 {COUSINS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                <option value="Familia">Familia</option>
                                 <option value="Caja">Caja</option>
                                 <option value="Cliente">Cliente</option>
                             </select>
@@ -215,6 +217,7 @@ const ChatView: React.FC<ChatViewProps> = ({ apiKey }) => {
                                 className="w-full text-sm border border-slate-200 rounded p-1"
                             >
                                 {COUSINS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                <option value="Familia">Familia</option>
                                 <option value="Caja">Caja</option>
                                 <option value="Cliente">Cliente</option>
                             </select>

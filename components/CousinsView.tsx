@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Transaction } from '../types';
 import { COUSINS } from '../constants';
 import { addTransaction } from '../services/firebase';
-import { X, Save } from 'lucide-react';
+import { X, Save, Heart } from 'lucide-react';
 
 interface CousinsViewProps {
   transactions: Transaction[];
@@ -37,6 +37,12 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
       }
     });
     return balance;
+  };
+
+  const getFamilyDonationsTotal = () => {
+      return transactions
+        .filter(t => t.category === 'Donación' && t.paidBy === 'Familia')
+        .reduce((acc, curr) => acc + curr.amountUSD, 0);
   };
 
   const openSettleModal = (name: string, balance: number) => {
@@ -81,6 +87,8 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
     setSettleModal(null);
     setSettleAmount('');
   };
+
+  const familyDonations = getFamilyDonationsTotal();
 
   return (
     <div className="p-4 space-y-4 pb-24 relative">
@@ -165,6 +173,26 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
           );
         })}
       </div>
+
+      {/* DONACIONES FAMILIARES */}
+      <div className="mt-6 border-t border-slate-200 pt-4">
+        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Fondo Común</h3>
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-xl shadow-sm border border-purple-100 flex justify-between items-center">
+             <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-purple-600 shadow-sm">
+                  <Heart size={20} fill="currentColor" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-800">Donaciones Familia</p>
+                  <p className="text-xs text-slate-500">Aportes externos / Regalos</p>
+                </div>
+            </div>
+            <span className="text-lg font-bold text-purple-600">
+                  USD {familyDonations.toFixed(0)}
+            </span>
+        </div>
+      </div>
+
       <div className="mt-8 p-4 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-1">
         <p><strong>A favor (Verde):</strong> El Airbnb le debe dinero al primo (porque pagó gastos).</p>
         <p><strong>Debe (Rojo):</strong> El primo tiene dinero del Airbnb, cobró una reserva no depositada o sacó un Adelanto.</p>

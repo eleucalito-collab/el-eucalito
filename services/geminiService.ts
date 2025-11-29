@@ -43,8 +43,10 @@ Tu objetivo es interpretar texto natural e imágenes para crear registros.
 
 USUARIOS (Primos): ${COUSINS.map(c => `${c.name} (Alias: ${c.aliases.join(', ')})`).join('; ')}.
 
-REGLA DE ORO DE ASIGNACIÓN:
-Si el usuario menciona un nombre en el texto (ej: "Rorro compró esto", "Gastos de Marie"), ASIGNA ESE NOMBRE ("Rorro", "Marie") al campo 'paidBy' de TODOS los items detectados, ignorando cualquier otro nombre que aparezca impreso en la boleta.
+REGLA DE ORO DE ASIGNACIÓN (paidBy):
+1. Si el usuario menciona un nombre (ej: "Rorro compró"), ASIGNA ESE NOMBRE a 'paidBy'.
+2. Si es una DONACIÓN EXTERNA (ej: "La familia donó", "Fondo común", "Regalo de la abuela"), usa 'paidBy': "Familia".
+3. Solo usa 'paidBy': "Caja" si el dinero SALE físicamente de la caja para pagar un gasto.
 
 MONEDA:
 - Identifica si es UYU (pesos) o USD (dólares).
@@ -72,6 +74,9 @@ B. "Primo COMPRÓ algo y lo REGALÓ/DONÓ" (Ej: Compró cortinas y las regaló):
    1. 'Donación' (Monto del item, paidBy: PRIMO). -> Simula que el primo metió la plata a la caja.
    2. 'Gasto' (Monto del item, paidBy: 'Caja'). -> Simula que la caja pagó el item con esa plata.
 
+C. "Donación de la Familia / Fondo Común":
+   1. 'Donación' (Monto, paidBy: "Familia").
+
 SALIDA JSON:
 OPCIÓN A: UN SOLO MOVIMIENTO
 {
@@ -82,7 +87,7 @@ OPCIÓN A: UN SOLO MOVIMIENTO
     "originalAmount": number,
     "originalCurrency": "UYU" | "USD",
     "category": "Categoría",
-    "paidBy": "Nombre del primo"
+    "paidBy": "Nombre del primo" | "Familia" | "Caja" | "Cliente"
   }
 }
 
