@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Calendar, PlusCircle, Users, Settings, Trees } from 'lucide-react';
+import { LayoutDashboard, Calendar, PlusCircle, Users, Settings, Trees, Download } from 'lucide-react';
 import { Tab, Transaction, Booking } from './types';
 import { subscribeToTransactions, subscribeToBookings, subscribeToGlobalSettings, isFirebaseConfigured } from './services/firebase';
 import BalanceView from './components/BalanceView';
@@ -35,6 +35,50 @@ const App: React.FC = () => {
     };
   }, []);
 
+  const handleExportCSV = () => {
+    // Definir encabezados
+    const headers = [
+        "Fecha",
+        "Descripción",
+        "Categoría",
+        "Quién Pagó",
+        "Monto Original",
+        "Moneda Orig.",
+        "Tasa Cambio (TC)",
+        "Monto Final (USD)",
+        "Estado"
+    ];
+
+    // Convertir datos a filas CSV
+    const rows = transactions.map(t => [
+        t.date,
+        `"${t.description.replace(/"/g, '""')}"`, // Escapar comillas
+        t.category,
+        t.paidBy,
+        t.originalAmount || t.amountUSD,
+        t.originalCurrency,
+        t.exchangeRate || 1,
+        t.amountUSD,
+        t.isConfirmed ? "Confirmado" : "Pendiente"
+    ]);
+
+    // Unir todo con comas y saltos de línea
+    const csvContent = [
+        headers.join(","),
+        ...rows.map(r => r.join(","))
+    ].join("\n");
+
+    // Crear blob y descargar (con BOM para que Excel lea tildes)
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `El_Eucalito_Reporte_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'balance':
@@ -59,12 +103,27 @@ const App: React.FC = () => {
       <main className="h-screen overflow-hidden flex flex-col">
         {/* Dynamic Header based on Tab */}
         <header className="bg-white p-4 border-b border-slate-100 sticky top-0 z-10 flex justify-between items-center">
-            <h1 className="text-xl font-bold text-primary flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <Trees size={20} />
-                </div>
-                El Eucalito
-            </h1>
+            <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-primary flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <Trees size={20} />
+                    </div>
+                    El Eucalito
+                </h1>
+                
+                {/* Botón Exportar solo visible en Balance */}
+                {activeTab === 'balance' && (
+                    <button 
+                        onClick={handleExportCSV}
+                        className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded text-[10px] font-bold transition-colors"
+                        title="Exportar a Excel/CSV"
+                    >
+                        <Download size={12} />
+                        CSV
+                    </button>
+                )}
+            </div>
+
             <div className="flex items-center gap-2">
                 {isSynced && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">ONLINE</span>}
             </div>

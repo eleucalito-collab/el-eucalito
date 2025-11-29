@@ -1,14 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Transaction } from '../types';
 import { COUSINS } from '../constants';
 import { addTransaction } from '../services/firebase';
+import { X, Save } from 'lucide-react';
 
 interface CousinsViewProps {
   transactions: Transaction[];
 }
 
 const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
-  
+  const [settleModal, setSettleModal] = useState<{name: string, totalBalance: number} | null>(null);
+  const [settleAmount, setSettleAmount] = useState<string>('');
+
   const getCousinBalance = (name: string) => {
     let balance = 0;
     transactions.forEach(t => {
@@ -36,43 +39,99 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
     return balance;
   };
 
-  const handleSettle = async (name: string, balance: number) => {
-    if (balance === 0) return;
+  const openSettleModal = (name: string, balance: number) => {
+      setSettleModal({ name, totalBalance: balance });
+      setSettleAmount(Math.abs(balance).toString());
+  }
 
-    const absBalance = Math.abs(balance);
-    let message = "";
+  const handleConfirmSettle = async () => {
+    if (!settleModal || !settleAmount) return;
+    
+    const amountToPay = parseFloat(settleAmount);
+    if (isNaN(amountToPay) || amountToPay <= 0) {
+        alert("Ingresa un monto válido");
+        return;
+    }
+
+    const { name, totalBalance } = settleModal;
     let category = "";
     let description = "";
 
-    if (balance > 0) {
-        // La Caja DEBE al Primo. La caja paga.
-        message = `¿Confirmar que se le pagaron USD ${absBalance} a ${name} para saldar la deuda?`;
+    if (totalBalance > 0) {
+        // La Caja DEBE al Primo. (Saldo Positivo). La caja paga.
         category = "Reembolso";
-        description = `Reembolso total a ${name}`;
+        description = `Reembolso (Parcial/Total) a ${name}`;
     } else {
-        // El Primo DEBE a la Caja. El primo paga.
-        message = `¿Confirmar que ${name} entregó USD ${absBalance} a la caja?`;
+        // El Primo DEBE a la Caja. (Saldo Negativo). El primo paga.
         category = "Ingreso";
-        description = `Saldo de deuda de ${name}`;
+        description = `Pago deuda (Parcial/Total) de ${name}`;
     }
 
-    if (window.confirm(message)) {
-        await addTransaction({
-            date: new Date().toISOString().split('T')[0],
-            description: description,
-            amountUSD: absBalance,
-            originalCurrency: 'USD',
-            category: category as any,
-            paidBy: name,
-            isConfirmed: true,
-            createdAt: Date.now()
-        });
-    }
+    await addTransaction({
+        date: new Date().toISOString().split('T')[0],
+        description: description,
+        amountUSD: amountToPay,
+        originalCurrency: 'USD',
+        category: category as any,
+        paidBy: name,
+        isConfirmed: true,
+        createdAt: Date.now()
+    });
+
+    setSettleModal(null);
+    setSettleAmount('');
   };
 
   return (
-    <div className="p-4 space-y-4 pb-24">
+    <div className="p-4 space-y-4 pb-24 relative">
       <h2 className="text-xl font-bold text-slate-800 mb-4">Estado de Cuenta Primos</h2>
+      
+      {/* SETTLE MODAL */}
+      {settleModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+             <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+                <div className="bg-slate-800 p-4 flex justify-between items-center text-white">
+                    <h3 className="font-bold">Saldar Cuenta: {settleModal.name}</h3>
+                    <button onClick={() => setSettleModal(null)}><X size={20}/></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div className="text-center mb-4">
+                        <p className="text-sm text-slate-500">Deuda Total Actual</p>
+                        <p className={`text-2xl font-bold ${settleModal.totalBalance > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {settleModal.totalBalance > 0 ? 'A Favor (Caja Debe)' : 'En Contra (Debe a Caja)'}
+                            <br/>
+                            USD {Math.abs(settleModal.totalBalance).toFixed(2)}
+                        </p>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
+                            Monto a saldar hoy (USD)
+                        </label>
+                        <input 
+                            type="number" 
+                            step="0.01"
+                            value={settleAmount}
+                            onChange={(e) => setSettleAmount(e.target.value)}
+                            className="w-full text-lg border-2 border-slate-200 rounded-xl p-3 focus:border-primary outline-none"
+                            placeholder="0.00"
+                        />
+                        <p className="text-xs text-slate-400 mt-2 text-center">
+                            Si ingresas menos del total, quedará un saldo pendiente.
+                        </p>
+                    </div>
+
+                    <button 
+                        onClick={handleConfirmSettle}
+                        className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl flex justify-center gap-2 hover:bg-emerald-700 transition-colors"
+                    >
+                        <Save size={18} /> Confirmar Transacción
+                    </button>
+                </div>
+             </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         {COUSINS.map((cousin) => {
           const balance = getCousinBalance(cousin.name);
@@ -85,17 +144,17 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
                 <div>
                   <p className="font-bold text-slate-800">{cousin.name}</p>
                   <p className="text-xs text-slate-400">
-                    {balance === 0 ? 'Al día' : (balance > 0 ? 'A favor (Caja debe)' : 'Debe (Caja cobra)')}
+                    {Math.abs(balance) < 0.01 ? 'Al día' : (balance > 0 ? 'A favor (Caja debe)' : 'Debe (Caja cobra)')}
                   </p>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2">
                 <span className={`text-lg font-bold ${balance > 0 ? 'text-emerald-600' : (balance < 0 ? 'text-red-500' : 'text-slate-400')}`}>
-                  {balance === 0 ? '-' : `USD ${Math.abs(balance).toFixed(0)}`}
+                  {Math.abs(balance) < 0.01 ? '-' : `USD ${Math.abs(balance).toFixed(0)}`}
                 </span>
-                {balance !== 0 && (
+                {Math.abs(balance) >= 0.01 && (
                     <button 
-                        onClick={() => handleSettle(cousin.name, balance)}
+                        onClick={() => openSettleModal(cousin.name, balance)}
                         className="text-xs px-3 py-1 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors"
                     >
                         Saldar
@@ -109,7 +168,7 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
       <div className="mt-8 p-4 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-1">
         <p><strong>A favor (Verde):</strong> El Airbnb le debe dinero al primo (porque pagó gastos).</p>
         <p><strong>Debe (Rojo):</strong> El primo tiene dinero del Airbnb, cobró una reserva no depositada o sacó un Adelanto.</p>
-        <p><strong>Botón Saldar:</strong> Crea automáticamente un movimiento para dejar la cuenta en 0.</p>
+        <p><strong>Botón Saldar:</strong> Permite pagar la deuda total o parcial.</p>
       </div>
     </div>
   );
