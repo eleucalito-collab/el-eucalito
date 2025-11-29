@@ -150,6 +150,13 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
     setExpandedCategory(expandedCategory === catName ? null : catName);
   };
 
+  const getAmountColor = (category: Category) => {
+      if (['Ingreso', 'Préstamo', 'Pago Reserva', 'Donación'].includes(category)) return 'text-emerald-600';
+      if (category === 'Adelanto') return 'text-slate-500';
+      if (category === 'Reembolso') return 'text-cyan-600'; // Color distintivo para pagos de deuda
+      return 'text-slate-700';
+  };
+
   return (
     <div className="p-4 space-y-6 pb-24 relative">
       {/* Edit Modal */}
@@ -317,7 +324,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex flex-col items-end">
-                    <span className={`font-bold ${['Ingreso', 'Préstamo', 'Pago Reserva', 'Donación'].includes(t.category) ? 'text-emerald-600' : (t.category === 'Adelanto' ? 'text-slate-500' : 'text-slate-700')}`}>
+                    <span className={`font-bold ${getAmountColor(t.category)}`}>
                     {['Ingreso', 'Préstamo', 'Pago Reserva', 'Donación'].includes(t.category) ? '+' : '-'}{formatCurrency(t.amountUSD)}
                     </span>
                 </div>
