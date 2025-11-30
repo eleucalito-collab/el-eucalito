@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 import { Transaction, Booking, Category } from '../types';
 import { CATEGORY_COLORS, CATEGORIES } from '../constants';
 import { format } from 'date-fns';
@@ -33,11 +33,9 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
     let totalPendingDebt = 0; // Cuánto debe el Eucalito a los Primos (Suma de saldos)
     
     transactions.forEach(t => {
-      // Definimos quién es un "Primo" real (que genera deuda individual).
-      // "Familia" se considera externo (como Cliente) para efectos de deuda individual.
       const isCousin = !['Caja', 'El Eucalito', 'Airbnb', 'Cliente', 'Familia'].includes(t.paidBy);
 
-      // --- 1. CONTABILIDAD GENERAL (Visualización) ---
+      // --- 1. CONTABILIDAD GENERAL ---
       if (t.category === 'Ingreso' || t.category === 'Pago Reserva') {
         businessIncome += t.amountUSD;
       } else if (t.category === 'Préstamo') {
@@ -46,66 +44,36 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
         contributions += t.amountUSD;
         totalDonations += t.amountUSD;
       } else if (!['Reembolso', 'Adelanto'].includes(t.category)) {
-        // Gastos operativos (Insumos, etc)
         totalExpense += t.amountUSD;
       }
 
-      // --- 2. LÓGICA DE CAJA Y DEUDA (Precisión) ---
-      
-      // A. GASTOS (Insumos, Mant, etc)
+      // --- 2. LÓGICA DE CAJA Y DEUDA ---
       if (!['Ingreso', 'Pago Reserva', 'Préstamo', 'Adelanto', 'Reembolso', 'Donación'].includes(t.category)) {
           if (isCousin) {
-              // Pagó un primo con su plata -> La deuda sube (Caja debe al primo). La Caja física NO se mueve.
               totalPendingDebt += t.amountUSD;
           } else {
-              // Pagó la Caja (o Familia/Cliente asumiendo regalo) -> La Caja baja si paga 'Caja'.
-              if (t.paidBy === 'Caja') {
-                  currentBox -= t.amountUSD;
-              }
+              if (t.paidBy === 'Caja') currentBox -= t.amountUSD;
           }
       }
-
-      // B. INGRESOS (Alquileres)
       if (['Ingreso', 'Pago Reserva'].includes(t.category)) {
-          if (isCousin) {
-              // Lo cobró un primo y se lo quedó -> La deuda BAJA (El primo le debe a la caja). Caja no se mueve.
-              totalPendingDebt -= t.amountUSD;
-          } else {
-              // Entró a la Caja directo -> Caja sube.
-              currentBox += t.amountUSD;
-          }
+          if (isCousin) totalPendingDebt -= t.amountUSD;
+          else currentBox += t.amountUSD;
       }
-
-      // C. MOVIMIENTOS FINANCIEROS
       if (t.category === 'Préstamo') {
-          // Primo pone plata en la caja -> Caja sube. Deuda sube.
           currentBox += t.amountUSD;
           totalPendingDebt += t.amountUSD;
       }
-
       if (t.category === 'Adelanto') {
-          // Primo saca plata de la caja -> Caja baja. Deuda baja.
           currentBox -= t.amountUSD;
           totalPendingDebt -= t.amountUSD;
       }
-
       if (t.category === 'Reembolso') {
-          // Caja paga deuda al primo -> Caja baja. Deuda baja.
           currentBox -= t.amountUSD;
           totalPendingDebt -= t.amountUSD;
       }
-
       if (t.category === 'Donación') {
-          // 1. Donación de "Familia" o "Cliente": Entra dinero a caja. NO afecta deuda.
-          if (!isCousin) {
-              currentBox += t.amountUSD;
-          } 
-          // 2. Donación de Primo (Compra regalada):
-          // En la IA esto se modela como "Donación (Primo)" + "Gasto (Caja)".
-          // Aquí: "Donación (Primo)" -> No toca caja. Baja Deuda (porque asumimos que el sistema deuda sumó algo previamente, o simplemente es un aporte a fondo perdido).
-          else {
-              totalPendingDebt -= t.amountUSD; 
-          }
+          if (!isCousin) currentBox += t.amountUSD;
+          else totalPendingDebt -= t.amountUSD; 
       }
     });
 
@@ -119,8 +87,6 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       .filter(i => i.value > 0)
       .sort((a, b) => b.value - a.value);
 
-    // CÁLCULO DE GANANCIA REAL (Profit)
-    // Ingresos Operativos + Donaciones (Capital regalado) - Gastos
     const netProfit = (businessIncome + totalDonations) - totalExpense;
 
     return { 
@@ -234,7 +200,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
         
         {/* Deuda / Donaciones Card */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Deuda / Donaciones</p>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Deuda</p>
           
           <div className="flex justify-between items-baseline mb-1 border-b border-slate-50 pb-1">
              <span className="text-[9px] text-slate-400">Neto Deuda</span>
@@ -244,7 +210,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
           </div>
 
           <div className="flex justify-between items-baseline">
-             <span className="text-[9px] text-slate-400">Donado</span>
+             <span className="text-[9px] text-slate-400">Total Donado</span>
              <span className="text-sm font-bold text-purple-600">
                 {formatCurrency(stats.totalDonations)}
              </span>
@@ -252,7 +218,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
         </div>
       </div>
 
-      {/* RENTABILIDAD / GANANCIA CARD */}
+      {/* GANANCIAS AIRBNB CARD */}
       <div className="bg-slate-800 p-4 rounded-2xl shadow-md border border-slate-700 flex justify-between items-center text-white">
          <div>
             <div className="flex items-center gap-2 mb-1">
@@ -270,31 +236,13 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
          </div>
       </div>
 
-      {/* CHART & CATEGORIES (Horizontal Layout) */}
-      <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
-         <div className="flex flex-row items-center h-[140px]">
-            {/* Left: Title + Legend */}
-            <div className="w-5/12 flex flex-col justify-center border-r border-slate-50 pr-2">
-                <h3 className="text-xs font-bold text-slate-700 mb-2 leading-tight">Distribución<br/>de Gastos</h3>
-                <div className="space-y-1 overflow-hidden">
-                    {stats.expensesByCategory.length > 0 ? (
-                        stats.expensesByCategory.slice(0, 5).map(cat => (
-                            <div key={cat.name} className="flex items-center gap-1.5 w-full">
-                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.name as keyof typeof CATEGORY_COLORS] }} />
-                                <span className="text-[9px] text-slate-500 truncate flex-1">{cat.name}</span>
-                                <span className="text-[9px] font-bold text-slate-700">
-                                    {(cat.value / (stats.totalExpense || 1) * 100).toFixed(0)}%
-                                </span>
-                            </div>
-                        ))
-                    ) : (
-                        <span className="text-[9px] text-slate-400">Sin datos</span>
-                    )}
-                </div>
-            </div>
-
-            {/* Right: Pie Chart */}
-            <div className="w-7/12 h-full relative">
+      {/* UNIFIED EXPENSES PANEL (Chart + Breakdown) */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        
+        {/* Header & Chart */}
+        <div className="p-4 flex flex-col items-center bg-slate-50/50">
+             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Distribución de Gastos</h3>
+             <div style={{ width: '100%', height: 140 }}>
                 {stats.expensesByCategory.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -302,8 +250,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
                             data={stats.expensesByCategory} 
                             cx="50%" 
                             cy="50%" 
-                            innerRadius={35}
-                            outerRadius={55} 
+                            innerRadius={40}
+                            outerRadius={60} 
                             paddingAngle={2}
                             dataKey="value"
                             >
@@ -313,63 +261,69 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
                         </PieChart>
                     </ResponsiveContainer>
                 ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-300">
-                        No hay datos
+                    <div className="h-full flex items-center justify-center text-slate-300 text-xs">
+                        Sin datos
                     </div>
                 )}
-            </div>
-         </div>
-      </div>
+             </div>
+        </div>
 
-      {/* Breakdown by Category (Accordion) */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-bold text-slate-700 ml-1">Desglose por Categoría</h3>
-        {stats.expensesByCategory.map((cat) => (
-          <div key={cat.name} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-            <button 
-              onClick={() => toggleCategory(cat.name)}
-              className="w-full p-4 flex justify-between items-center hover:bg-slate-50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[cat.name as keyof typeof CATEGORY_COLORS] }} />
-                <span className="font-bold text-slate-700 text-sm">{cat.name}</span>
-                <span className="text-xs text-slate-400">({cat.transactions.length})</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-700 text-sm">{formatCurrency(cat.value)}</span>
-                {expandedCategory === cat.name ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
-              </div>
-            </button>
-            
-            {expandedCategory === cat.name && (
-              <div className="bg-slate-50 border-t border-slate-100">
-                {cat.transactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
-                  <div key={t.id} className="p-3 border-b border-slate-200 last:border-0 pl-9 pr-4 flex justify-between items-start">
-                    <div>
-                      <div className="flex gap-2 items-center">
-                        <span className="text-xs font-bold text-slate-700">{format(new Date(t.date), 'dd/MM/yy')}</span>
-                        <span className="text-xs text-slate-500">• {t.paidBy}</span>
-                      </div>
-                      <p className="text-sm text-slate-800">{t.description}</p>
+        {/* Breakdown List (Unified Legend) */}
+        <div className="divide-y divide-slate-100 border-t border-slate-100">
+            {stats.expensesByCategory.map((cat) => {
+              const percentage = stats.totalExpense > 0 ? ((cat.value / stats.totalExpense) * 100).toFixed(0) : 0;
+              return (
+                <div key={cat.name} className="bg-white">
+                    <button 
+                    onClick={() => toggleCategory(cat.name)}
+                    className="w-full p-4 flex justify-between items-center hover:bg-slate-50 transition-colors"
+                    >
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full shadow-sm shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.name as keyof typeof CATEGORY_COLORS] }} />
+                            <span className="font-bold text-slate-700 text-sm">{cat.name}</span>
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded ml-1">
+                                {percentage}%
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-700 text-sm">{formatCurrency(cat.value)}</span>
+                            {expandedCategory === cat.name ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+                        </div>
+                    </button>
+                    
+                    {/* Detail Items */}
+                    {expandedCategory === cat.name && (
+                    <div className="bg-slate-50 border-t border-slate-100 shadow-inner">
+                        {/* Use spread operator to create a shallow copy before sorting to avoid mutation of read-only array */}
+                        {[...cat.transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
+                        <div key={t.id} className="p-3 border-b border-slate-200 last:border-0 pl-9 pr-4 flex justify-between items-start">
+                            <div>
+                            <div className="flex gap-2 items-center">
+                                <span className="text-xs font-bold text-slate-700">{format(new Date(t.date), 'dd/MM/yy')}</span>
+                                <span className="text-xs text-slate-500">• {t.paidBy}</span>
+                            </div>
+                            <p className="text-sm text-slate-800">{t.description}</p>
+                            </div>
+                            <div className="flex flex-col items-end">
+                            <span className="text-sm font-bold text-slate-700">{formatCurrency(t.amountUSD)}</span>
+                            {t.originalCurrency === 'UYU' && (
+                                <span className="text-[10px] text-slate-400">
+                                {formatUYU(t.originalAmount || 0)} (TC: {t.exchangeRate?.toFixed(2)})
+                                </span>
+                            )}
+                            <div className="flex gap-2 mt-1">
+                                <button onClick={(e) => { e.stopPropagation(); setEditingTx(t); }}><Pencil size={12} className="text-slate-400 hover:text-blue-500"/></button>
+                                <button onClick={(e) => handleDelete(e, t.id, t.description)}><Trash2 size={12} className="text-slate-400 hover:text-red-500"/></button>
+                            </div>
+                            </div>
+                        </div>
+                        ))}
                     </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-sm font-bold text-slate-700">{formatCurrency(t.amountUSD)}</span>
-                      {t.originalCurrency === 'UYU' && (
-                        <span className="text-[10px] text-slate-400">
-                          {formatUYU(t.originalAmount || 0)} (TC: {t.exchangeRate?.toFixed(2)})
-                        </span>
-                      )}
-                      <div className="flex gap-2 mt-1">
-                        <button onClick={(e) => { e.stopPropagation(); setEditingTx(t); }}><Pencil size={12} className="text-slate-400 hover:text-blue-500"/></button>
-                        <button onClick={(e) => handleDelete(e, t.id, t.description)}><Trash2 size={12} className="text-slate-400 hover:text-red-500"/></button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+                    )}
+                </div>
+              );
+            })}
+        </div>
       </div>
 
       {/* Recent Movements (All mixed) */}
