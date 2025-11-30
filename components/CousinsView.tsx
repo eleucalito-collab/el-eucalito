@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Transaction } from '../types';
 import { COUSINS } from '../constants';
 import { addTransaction } from '../services/firebase';
-import { X, Save, Heart } from 'lucide-react';
+import { X, Save, Heart, History, ChevronRight } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface CousinsViewProps {
   transactions: Transaction[];
@@ -10,27 +11,22 @@ interface CousinsViewProps {
 
 const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
   const [settleModal, setSettleModal] = useState<{name: string, totalBalance: number} | null>(null);
+  const [historyModal, setHistoryModal] = useState<string | null>(null); // Nombre del primo seleccionado
   const [settleAmount, setSettleAmount] = useState<string>('');
 
   const getCousinBalance = (name: string) => {
     let balance = 0;
     transactions.forEach(t => {
-      // Normalizamos: paidBy debería ser el nombre del primo.
       if (t.paidBy.toLowerCase() === name.toLowerCase()) {
-        
         // 1. EL PRIMO PONE PLATA (La caja le debe al primo)
         if (['Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos', 'Préstamo'].includes(t.category)) {
            balance += t.amountUSD;
         }
-
         // 2. EL PRIMO SACA PLATA O TIENE PLATA DE LA CAJA (El primo le debe a la caja)
-        // Reembolso: La caja le pagó al primo.
-        // Adelanto: El primo sacó dinero de la caja (Retiro).
         if (t.category === 'Reembolso' || t.category === 'Adelanto') {
             balance -= t.amountUSD;
         }
-        
-        // Ingreso/Pago Reserva: Si dice 'paidBy: Primo', significa que el primo cobró ese dinero y lo tiene en su bolsillo.
+        // Ingreso/Pago Reserva: Si dice 'paidBy: Primo', significa que el primo cobró ese dinero y lo tiene.
         if (['Ingreso', 'Pago Reserva'].includes(t.category)) {
             balance -= t.amountUSD;
         }
@@ -45,7 +41,8 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
         .reduce((acc, curr) => acc + curr.amountUSD, 0);
   };
 
-  const openSettleModal = (name: string, balance: number) => {
+  const openSettleModal = (e: React.MouseEvent, name: string, balance: number) => {
+      e.stopPropagation(); // Evitar abrir el historial
       setSettleModal({ name, totalBalance: balance });
       setSettleAmount(Math.abs(balance).toString());
   }
@@ -64,11 +61,9 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
     let description = "";
 
     if (totalBalance > 0) {
-        // La Caja DEBE al Primo. (Saldo Positivo). La caja paga.
         category = "Reembolso";
         description = `Reembolso (Parcial/Total) a ${name}`;
     } else {
-        // El Primo DEBE a la Caja. (Saldo Negativo). El primo paga.
         category = "Ingreso";
         description = `Pago deuda (Parcial/Total) de ${name}`;
     }
@@ -90,10 +85,77 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
 
   const familyDonations = getFamilyDonationsTotal();
 
+  // Filtrar transacciones para el historial del primo seleccionado
+  const getCousinHistory = (name: string) => {
+      return transactions
+        .filter(t => t.paidBy.toLowerCase() === name.toLowerCase())
+        .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
+
+  const isPositiveImpact = (category: string) => {
+      // Devuelve true si el movimiento AUMENTA la deuda de la caja hacia el primo (Verde)
+      return ['Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos', 'Préstamo'].includes(category);
+  };
+
   return (
     <div className="p-4 space-y-4 pb-24 relative">
       <h2 className="text-xl font-bold text-slate-800 mb-4">Estado de Cuenta Primos</h2>
       
+      {/* HISTORY MODAL */}
+      {historyModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={() => setHistoryModal(null)}>
+            <div className="bg-white w-full h-[85vh] sm:h-auto sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="bg-slate-800 p-4 flex justify-between items-center text-white shrink-0">
+                    <h3 className="font-bold flex items-center gap-2">
+                        <History size={18}/> Historial: {historyModal}
+                    </h3>
+                    <button onClick={() => setHistoryModal(null)}><X size={20}/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-0">
+                    {getCousinHistory(historyModal).length === 0 ? (
+                        <div className="p-8 text-center text-slate-400">No hay movimientos registrados.</div>
+                    ) : (
+                        <table className="w-full text-left text-sm border-collapse">
+                            <thead className="bg-slate-50 text-slate-500 font-medium sticky top-0">
+                                <tr>
+                                    <th className="p-3 border-b">Fecha/Desc</th>
+                                    <th className="p-3 border-b text-right">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {getCousinHistory(historyModal).map(t => {
+                                    const isPositive = isPositiveImpact(t.category);
+                                    return (
+                                        <tr key={t.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                                            <td className="p-3 align-top">
+                                                <div className="font-bold text-slate-700 text-xs mb-0.5">{format(new Date(t.date), 'dd/MM/yy')}</div>
+                                                <div className="text-slate-600 leading-tight">{t.description}</div>
+                                                <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full inline-block mt-1">{t.category}</span>
+                                            </td>
+                                            <td className="p-3 text-right align-top">
+                                                <span className={`font-bold ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                    {isPositive ? '+' : '-'} USD {t.amountUSD}
+                                                </span>
+                                                {t.originalCurrency === 'UYU' && (
+                                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                                        ({t.originalAmount} UYU)
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+                <div className="p-4 border-t border-slate-100 bg-slate-50 text-center text-xs text-slate-500 shrink-0">
+                    Verde (+) = Aumenta Deuda a Favor • Rojo (-) = Disminuye Deuda
+                </div>
+            </div>
+        </div>
+      )}
+
       {/* SETTLE MODAL */}
       {settleModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -144,13 +206,20 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
         {COUSINS.map((cousin) => {
           const balance = getCousinBalance(cousin.name);
           return (
-            <div key={cousin.name} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
+            <div 
+                key={cousin.name} 
+                onClick={() => setHistoryModal(cousin.name)}
+                className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors group"
+            >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg">
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg group-hover:bg-primary group-hover:text-white transition-colors">
                   {cousin.name.charAt(0)}
                 </div>
                 <div>
-                  <p className="font-bold text-slate-800">{cousin.name}</p>
+                  <div className="flex items-center gap-1">
+                      <p className="font-bold text-slate-800">{cousin.name}</p>
+                      <ChevronRight size={14} className="text-slate-300"/>
+                  </div>
                   <p className="text-xs text-slate-400">
                     {Math.abs(balance) < 0.01 ? 'Al día' : (balance > 0 ? 'A favor (Caja debe)' : 'Debe (Caja cobra)')}
                   </p>
@@ -162,8 +231,8 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
                 </span>
                 {Math.abs(balance) >= 0.01 && (
                     <button 
-                        onClick={() => openSettleModal(cousin.name, balance)}
-                        className="text-xs px-3 py-1 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors"
+                        onClick={(e) => openSettleModal(e, cousin.name, balance)}
+                        className="text-xs px-3 py-1 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors z-10"
                     >
                         Saldar
                     </button>
@@ -194,9 +263,9 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
       </div>
 
       <div className="mt-8 p-4 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-1">
-        <p><strong>A favor (Verde):</strong> El Airbnb le debe dinero al primo (porque pagó gastos).</p>
-        <p><strong>Debe (Rojo):</strong> El primo tiene dinero del Airbnb, cobró una reserva no depositada o sacó un Adelanto.</p>
-        <p><strong>Botón Saldar:</strong> Permite pagar la deuda total o parcial.</p>
+        <p><strong>Click en el nombre:</strong> Ver historial detallado del primo.</p>
+        <p><strong>A favor (Verde):</strong> El Airbnb le debe dinero al primo.</p>
+        <p><strong>Debe (Rojo):</strong> El primo tiene dinero del Airbnb.</p>
       </div>
     </div>
   );

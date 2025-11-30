@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Transaction, Booking, Category } from '../types';
 import { CATEGORY_COLORS, CATEGORIES } from '../constants';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Trash2, Pencil, X, Save, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, Pencil, X, Save, ChevronDown, ChevronUp, TrendingUp, TrendingDown } from 'lucide-react';
 import { deleteTransaction, updateTransaction } from '../services/firebase';
 
 interface BalanceViewProps {
@@ -18,27 +18,14 @@ const formatCurrency = (amount: number) =>
 const formatUYU = (amount: number) =>
   new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU' }).format(amount);
 
-const RADIAN = Math.PI / 180;
-const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-  if (percent < 0.05) return null; 
-  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-  return (
-    <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={10} fontWeight="bold">
-      {`${(percent * 100).toFixed(0)}%`}
-    </text>
-  );
-};
-
 const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   const stats = useMemo(() => {
     let businessIncome = 0; // Airbnb
-    let contributions = 0; // Préstamos + Donaciones
+    let contributions = 0; // Préstamos + Donaciones (Total Aportes)
+    let totalDonations = 0; // Solo Donaciones (para cálculo de ganancia)
     let totalExpense = 0; // Gastos contables (no necesariamente de caja)
     
     // Variables de Estado Financiero Real
@@ -53,8 +40,11 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       // --- 1. CONTABILIDAD GENERAL (Visualización) ---
       if (t.category === 'Ingreso' || t.category === 'Pago Reserva') {
         businessIncome += t.amountUSD;
-      } else if (t.category === 'Préstamo' || t.category === 'Donación') {
+      } else if (t.category === 'Préstamo') {
         contributions += t.amountUSD;
+      } else if (t.category === 'Donación') {
+        contributions += t.amountUSD;
+        totalDonations += t.amountUSD;
       } else if (!['Reembolso', 'Adelanto'].includes(t.category)) {
         // Gastos operativos (Insumos, etc)
         totalExpense += t.amountUSD;
@@ -129,7 +119,20 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       .filter(i => i.value > 0)
       .sort((a, b) => b.value - a.value);
 
-    return { businessIncome, contributions, totalExpense, totalPendingDebt, currentBox, expensesByCategory };
+    // CÁLCULO DE GANANCIA REAL (Profit)
+    // Ingresos Operativos + Donaciones (Capital regalado) - Gastos
+    const netProfit = (businessIncome + totalDonations) - totalExpense;
+
+    return { 
+        businessIncome, 
+        contributions, 
+        totalExpense, 
+        totalPendingDebt, 
+        currentBox, 
+        expensesByCategory, 
+        netProfit,
+        totalDonations 
+    };
   }, [transactions]);
 
   const recentTransactions = [...transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -228,45 +231,93 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
           <p className="text-xl font-bold text-emerald-600">{formatCurrency(stats.businessIncome)}</p>
           <span className="text-[9px] text-slate-400">Reservas / Alquiler</span>
         </div>
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Aportes Primos</p>
-          <div className="flex flex-col mt-1">
-             <p className="text-xl font-bold text-purple-600 leading-tight">{formatCurrency(stats.contributions)}</p>
-             <span className={`text-[10px] font-bold ${stats.totalPendingDebt >= 0 ? 'text-pink-500' : 'text-emerald-500'}`}>
-                Deuda: {formatCurrency(Math.abs(stats.totalPendingDebt))}
+        
+        {/* Deuda / Donaciones Card */}
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Deuda / Donaciones</p>
+          
+          <div className="flex justify-between items-baseline mb-1 border-b border-slate-50 pb-1">
+             <span className="text-[9px] text-slate-400">Neto Deuda</span>
+             <span className={`text-sm font-bold ${stats.totalPendingDebt >= 0 ? 'text-pink-500' : 'text-emerald-500'}`}>
+                {stats.totalPendingDebt >= 0 ? 'Caja Debe' : 'Primos Deben'} {formatCurrency(Math.abs(stats.totalPendingDebt))}
              </span>
           </div>
-          <span className="text-[9px] text-slate-400 mt-1 block">Préstamos + Donaciones</span>
+
+          <div className="flex justify-between items-baseline">
+             <span className="text-[9px] text-slate-400">Donado</span>
+             <span className="text-sm font-bold text-purple-600">
+                {formatCurrency(stats.totalDonations)}
+             </span>
+          </div>
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-         <h3 className="text-sm font-bold text-slate-700 mb-2 w-full text-center">Distribución de Gastos</h3>
-         <div style={{ width: '100%', height: 180 }}>
-           {stats.expensesByCategory.length > 0 ? (
-               <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie 
-                      data={stats.expensesByCategory} 
-                      cx="50%" 
-                      cy="50%" 
-                      labelLine={false}
-                      label={renderCustomizedLabel}
-                      outerRadius={60} 
-                      fill="#8884d8" 
-                      dataKey="value"
-                    >
-                      {stats.expensesByCategory.map((entry, index) => <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.name as keyof typeof CATEGORY_COLORS]} />)}
-                    </Pie>
-                    <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{fontSize: '10px', marginTop: '5px'}} />
-                  </PieChart>
-                </ResponsiveContainer>
-           ) : (
-               <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-                   No hay gastos registrados.
-               </div>
-           )}
+      {/* RENTABILIDAD / GANANCIA CARD */}
+      <div className="bg-slate-800 p-4 rounded-2xl shadow-md border border-slate-700 flex justify-between items-center text-white">
+         <div>
+            <div className="flex items-center gap-2 mb-1">
+                {stats.netProfit >= 0 ? <TrendingUp size={16} className="text-emerald-400"/> : <TrendingDown size={16} className="text-red-400"/>}
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ganancias Airbnb</p>
+            </div>
+            <p className="text-[10px] text-slate-400">
+                (Ingresos + Donaciones) - Gastos
+            </p>
+         </div>
+         <div className="text-right">
+             <p className={`text-2xl font-bold ${stats.netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {formatCurrency(stats.netProfit)}
+             </p>
+         </div>
+      </div>
+
+      {/* CHART & CATEGORIES (Horizontal Layout) */}
+      <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+         <div className="flex flex-row items-center h-[140px]">
+            {/* Left: Title + Legend */}
+            <div className="w-5/12 flex flex-col justify-center border-r border-slate-50 pr-2">
+                <h3 className="text-xs font-bold text-slate-700 mb-2 leading-tight">Distribución<br/>de Gastos</h3>
+                <div className="space-y-1 overflow-hidden">
+                    {stats.expensesByCategory.length > 0 ? (
+                        stats.expensesByCategory.slice(0, 5).map(cat => (
+                            <div key={cat.name} className="flex items-center gap-1.5 w-full">
+                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.name as keyof typeof CATEGORY_COLORS] }} />
+                                <span className="text-[9px] text-slate-500 truncate flex-1">{cat.name}</span>
+                                <span className="text-[9px] font-bold text-slate-700">
+                                    {(cat.value / (stats.totalExpense || 1) * 100).toFixed(0)}%
+                                </span>
+                            </div>
+                        ))
+                    ) : (
+                        <span className="text-[9px] text-slate-400">Sin datos</span>
+                    )}
+                </div>
+            </div>
+
+            {/* Right: Pie Chart */}
+            <div className="w-7/12 h-full relative">
+                {stats.expensesByCategory.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie 
+                            data={stats.expensesByCategory} 
+                            cx="50%" 
+                            cy="50%" 
+                            innerRadius={35}
+                            outerRadius={55} 
+                            paddingAngle={2}
+                            dataKey="value"
+                            >
+                            {stats.expensesByCategory.map((entry, index) => <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.name as keyof typeof CATEGORY_COLORS]} />)}
+                            </Pie>
+                            <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
+                        </PieChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-300">
+                        No hay datos
+                    </div>
+                )}
+            </div>
          </div>
       </div>
 
