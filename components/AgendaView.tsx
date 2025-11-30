@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
-import { Booking, Transaction } from '../types';
-import { startOfMonth, endOfMonth, eachDayOfInterval, format, isSameDay, isWithinInterval, parseISO, addMonths, subMonths } from 'date-fns';
+import { Booking } from '../types';
+import startOfMonth from 'date-fns/startOfMonth';
+import endOfMonth from 'date-fns/endOfMonth';
+import eachDayOfInterval from 'date-fns/eachDayOfInterval';
+import format from 'date-fns/format';
+import isSameDay from 'date-fns/isSameDay';
+import isWithinInterval from 'date-fns/isWithinInterval';
+import parseISO from 'date-fns/parseISO';
+import addMonths from 'date-fns/addMonths';
+import subMonths from 'date-fns/subMonths';
 import { es } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, CheckCircle, Clock, Trash2 } from 'lucide-react';
 import { addTransaction, deleteBooking } from '../services/firebase';

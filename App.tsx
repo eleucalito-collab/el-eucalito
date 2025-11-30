@@ -36,44 +36,100 @@ const App: React.FC = () => {
   }, []);
 
   const handleExportCSV = () => {
-    // Definir encabezados
-    const headers = [
-        "Fecha",
-        "Descripción",
-        "Categoría",
-        "Quién Pagó",
-        "Monto Original",
-        "Moneda Orig.",
-        "Tasa Cambio (TC)",
-        "Monto Final (USD)",
-        "Estado"
-    ];
+    // Helper para escapar comillas y evitar errores en CSV
+    const escape = (val: any) => {
+        if (val === null || val === undefined) return '';
+        return `"${String(val).replace(/"/g, '""')}"`;
+    };
 
-    // Convertir datos a filas CSV
-    const rows = transactions.map(t => [
-        t.date,
-        `"${t.description.replace(/"/g, '""')}"`, // Escapar comillas
-        t.category,
-        t.paidBy,
-        t.originalAmount || t.amountUSD,
-        t.originalCurrency,
-        t.exchangeRate || 1,
+    const formatDate = (dateStr: string) => dateStr;
+
+    // --- SECCIÓN 1: MAESTRO (TODO) ---
+    const masterHeaders = ["Fecha", "Descripción", "Categoría", "Quién Pagó", "Monto USD", "Monto Orig.", "Moneda", "T.C.", "Estado"];
+    const sortedTx = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    const masterRows = sortedTx.map(t => [
+        escape(formatDate(t.date)),
+        escape(t.description),
+        escape(t.category),
+        escape(t.paidBy),
         t.amountUSD,
+        t.originalAmount || t.amountUSD,
+        escape(t.originalCurrency),
+        t.exchangeRate || 1,
         t.isConfirmed ? "Confirmado" : "Pendiente"
-    ]);
+    ].join(","));
 
-    // Unir todo con comas y saltos de línea
+    // --- SECCIÓN 2: SOLO GASTOS (Por Categoría) ---
+    const expenseTx = sortedTx.filter(t => !['Ingreso', 'Pago Reserva', 'Préstamo', 'Donación', 'Reembolso', 'Adelanto'].includes(t.category));
+    // Ordenar por categoría y luego fecha
+    expenseTx.sort((a, b) => a.category.localeCompare(b.category) || new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    const expenseRows = expenseTx.map(t => [
+        escape(formatDate(t.date)),
+        escape(t.category),
+        escape(t.description),
+        escape(t.paidBy),
+        t.amountUSD
+    ].join(","));
+
+    // --- SECCIÓN 3: INGRESOS Y DONACIONES ---
+    const incomeTx = sortedTx.filter(t => ['Ingreso', 'Pago Reserva', 'Donación'].includes(t.category));
+    const incomeRows = incomeTx.map(t => [
+        escape(formatDate(t.date)),
+        escape(t.category),
+        escape(t.description),
+        escape(t.paidBy),
+        t.amountUSD
+    ].join(","));
+
+    // --- SECCIÓN 4: FINANCIERO (Préstamos y Deudas) ---
+    const debtTx = sortedTx.filter(t => ['Préstamo', 'Reembolso', 'Adelanto'].includes(t.category));
+    const debtRows = debtTx.map(t => [
+        escape(formatDate(t.date)),
+        escape(t.category),
+        escape(t.description),
+        escape(t.paidBy),
+        t.amountUSD
+    ].join(","));
+
+    // --- CONSTRUCCIÓN DEL ARCHIVO FINAL ---
     const csvContent = [
-        headers.join(","),
-        ...rows.map(r => r.join(","))
+        // ENCABEZADO REPORTE
+        `REPORTE GENERAL EL EUCALITO`,
+        `Generado el: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
+        "", // Línea vacía
+        
+        // BLOQUE 1
+        "--- 1. HISTORIAL MAESTRO (TODOS LOS MOVIMIENTOS) ---",
+        masterHeaders.join(","),
+        ...masterRows,
+        "", "", // Espacio
+        
+        // BLOQUE 2
+        "--- 2. DETALLE DE GASTOS OPERATIVOS (POR CATEGORÍA) ---",
+        "Fecha,Categoría,Descripción,Quién Pagó,Monto USD",
+        ...expenseRows,
+        "", "", // Espacio
+
+        // BLOQUE 3
+        "--- 3. INGRESOS Y DONACIONES ---",
+        "Fecha,Tipo,Descripción,Quién/Origen,Monto USD",
+        ...incomeRows,
+        "", "", // Espacio
+
+        // BLOQUE 4
+        "--- 4. MOVIMIENTOS DE DEUDA (PRÉSTAMOS / ADELANTOS) ---",
+        "Fecha,Tipo,Descripción,Primo,Monto USD",
+        ...debtRows,
     ].join("\n");
 
-    // Crear blob y descargar (con BOM para que Excel lea tildes)
+    // Crear blob y descargar (con BOM para que Excel lea tildes correctamente)
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `El_Eucalito_Reporte_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `El_Eucalito_Reporte_Completo_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
