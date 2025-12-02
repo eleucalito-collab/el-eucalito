@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Booking } from '../types';
-import * as dateFns from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, CheckCircle, Clock, Trash2 } from 'lucide-react';
 import { addTransaction, deleteBooking } from '../services/firebase';
@@ -9,12 +9,47 @@ interface AgendaViewProps {
   bookings: Booking[];
 }
 
+// Helpers to replace missing date-fns functions
+const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const endOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
+const subMonths = (date: Date, amount: number) => new Date(date.getFullYear(), date.getMonth() - amount, 1);
+const addMonths = (date: Date, amount: number) => new Date(date.getFullYear(), date.getMonth() + amount, 1);
+const isSameDay = (d1: Date, d2: Date) => d1.toDateString() === d2.toDateString();
+
+const parseISO = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+
+const isWithinInterval = (date: Date, interval: { start: Date, end: Date }) => {
+    // Set all to midnight for comparison to avoid time issues
+    const d = new Date(date.setHours(0,0,0,0));
+    const s = new Date(interval.start.setHours(0,0,0,0));
+    const e = new Date(interval.end.setHours(0,0,0,0));
+    return d.getTime() >= s.getTime() && d.getTime() <= e.getTime();
+};
+
+const eachDayOfInterval = ({ start, end }: { start: Date, end: Date }) => {
+    const days: Date[] = [];
+    const current = new Date(start);
+    current.setHours(0,0,0,0);
+    const endT = new Date(end);
+    endT.setHours(0,0,0,0);
+    
+    while (current <= endT) {
+        days.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+    }
+    return days;
+};
+
 const AgendaView: React.FC<AgendaViewProps> = ({ bookings }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const monthStart = dateFns.startOfMonth(currentDate);
-  const monthEnd = dateFns.endOfMonth(currentDate);
-  const daysInMonth = dateFns.eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   // Add empty placeholders for start of month alignment
   const startDay = monthStart.getDay(); 
@@ -51,13 +86,13 @@ const AgendaView: React.FC<AgendaViewProps> = ({ bookings }) => {
     <div className="p-4 space-y-4 pb-24 h-full flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm">
-        <button onClick={() => setCurrentDate(dateFns.subMonths(currentDate, 1))} className="p-2 hover:bg-slate-100 rounded-full">
+        <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 hover:bg-slate-100 rounded-full">
           <ChevronLeft className="w-5 h-5 text-slate-600" />
         </button>
         <h2 className="text-lg font-bold text-slate-800 capitalize">
-          {dateFns.format(currentDate, 'MMMM yyyy', { locale: es })}
+          {format(currentDate, 'MMMM yyyy', { locale: es })}
         </h2>
-        <button onClick={() => setCurrentDate(dateFns.addMonths(currentDate, 1))} className="p-2 hover:bg-slate-100 rounded-full">
+        <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 hover:bg-slate-100 rounded-full">
           <ChevronRight className="w-5 h-5 text-slate-600" />
         </button>
       </div>
@@ -73,7 +108,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ bookings }) => {
           {emptyDays.map((_, i) => <div key={`empty-${i}`} className="aspect-square" />)}
           {daysInMonth.map((day) => {
             const dayBookings = bookings.filter(b => 
-              dateFns.isWithinInterval(day, { start: dateFns.parseISO(b.startDate), end: dateFns.parseISO(b.endDate) })
+              isWithinInterval(day, { start: parseISO(b.startDate), end: parseISO(b.endDate) })
             );
 
             // Determine cell color based on bookings
@@ -96,14 +131,14 @@ const AgendaView: React.FC<AgendaViewProps> = ({ bookings }) => {
               }
             }
             
-            const isToday = dateFns.isSameDay(day, new Date());
+            const isToday = isSameDay(day, new Date());
 
             return (
               <div 
                 key={day.toISOString()} 
                 className={`aspect-square rounded-lg flex flex-col items-center justify-center relative border ${borderColor} ${bgColor} ${isToday ? 'ring-2 ring-slate-800' : ''}`}
               >
-                <span className={`text-sm font-medium ${textColor}`}>{dateFns.format(day, 'd')}</span>
+                <span className={`text-sm font-medium ${textColor}`}>{format(day, 'd')}</span>
                 {dayBookings.length > 0 && (
                    <div className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-current opacity-50" />
                 )}
@@ -118,9 +153,9 @@ const AgendaView: React.FC<AgendaViewProps> = ({ bookings }) => {
         <h3 className="font-bold text-slate-700 ml-1">Reservas del Mes</h3>
         {bookings
           .filter(b => {
-             const start = dateFns.parseISO(b.startDate);
-             const end = dateFns.parseISO(b.endDate);
-             return dateFns.isWithinInterval(start, { start: monthStart, end: monthEnd }) || dateFns.isWithinInterval(end, { start: monthStart, end: monthEnd });
+             const start = parseISO(b.startDate);
+             const end = parseISO(b.endDate);
+             return isWithinInterval(start, { start: monthStart, end: monthEnd }) || isWithinInterval(end, { start: monthStart, end: monthEnd });
           })
           .sort((a,b) => a.startDate.localeCompare(b.startDate))
           .map(b => (
@@ -128,7 +163,7 @@ const AgendaView: React.FC<AgendaViewProps> = ({ bookings }) => {
               <div>
                 <p className="font-bold text-slate-800">{b.guestName}</p>
                 <p className="text-xs text-slate-500">
-                  {dateFns.format(dateFns.parseISO(b.startDate), 'd MMM', {locale:es})} - {dateFns.format(dateFns.parseISO(b.endDate), 'd MMM', {locale:es})}
+                  {format(parseISO(b.startDate), 'd MMM', {locale:es})} - {format(parseISO(b.endDate), 'd MMM', {locale:es})}
                 </p>
                 <span className={`text-xs px-2 py-0.5 rounded-md mt-1 inline-block ${b.isFamily ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
                   {b.isFamily ? 'Familia' : `USD ${b.totalPriceUSD}`}

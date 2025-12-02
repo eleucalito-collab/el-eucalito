@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Transaction } from '../types';
 import { COUSINS } from '../constants';
 import { addTransaction } from '../services/firebase';
-import { X, Save, Heart, History, ChevronRight } from 'lucide-react';
+import { X, Save, Heart, History, ChevronRight, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface CousinsViewProps {
@@ -92,6 +92,49 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
         .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
+  const handleExportCousinHistory = (name: string) => {
+      const history = getCousinHistory(name);
+      
+      // 1. Calcular Totales por Categoría
+      const summary: Record<string, number> = {};
+      history.forEach(t => {
+          summary[t.category] = (summary[t.category] || 0) + t.amountUSD;
+      });
+
+      // Helper CSV
+      const escape = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+
+      // Construir CSV
+      let csvContent = [
+          `REPORTE DE CUENTA: ${name.toUpperCase()}`,
+          `Generado el: ${new Date().toLocaleDateString()}`,
+          "",
+          "--- RESUMEN POR CATEGORÍA ---",
+          "Categoría,Total USD",
+          ...Object.keys(summary).map(cat => `${escape(cat)},${summary[cat].toFixed(2)}`),
+          "",
+          "--- DETALLE DE MOVIMIENTOS ---",
+          "Fecha,Descripción,Categoría,Monto USD,Monto Orig.,Moneda",
+          ...history.map(t => [
+              escape(t.date),
+              escape(t.description),
+              escape(t.category),
+              t.amountUSD,
+              t.originalAmount || '',
+              t.originalCurrency
+          ].join(','))
+      ].join('\n');
+
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Historial_${name}_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
+
   const isPositiveImpact = (category: string) => {
       // Devuelve true si el movimiento AUMENTA la deuda de la caja hacia el primo (Verde)
       return ['Insumos', 'Mantenimiento', 'Servicios', 'Cuentas', 'Impuestos', 'Préstamo'].includes(category);
@@ -104,22 +147,33 @@ const CousinsView: React.FC<CousinsViewProps> = ({ transactions }) => {
       {/* HISTORY MODAL */}
       {historyModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={() => setHistoryModal(null)}>
-            <div className="bg-white w-full h-[85vh] sm:h-auto sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-white w-full h-[85vh] sm:h-auto sm:max-h-[80vh] sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="bg-slate-800 p-4 flex justify-between items-center text-white shrink-0">
                     <h3 className="font-bold flex items-center gap-2">
                         <History size={18}/> Historial: {historyModal}
                     </h3>
-                    <button onClick={() => setHistoryModal(null)}><X size={20}/></button>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => handleExportCousinHistory(historyModal!)} 
+                            className="p-1.5 hover:bg-slate-700 rounded-lg text-emerald-400"
+                            title="Exportar CSV"
+                        >
+                            <Download size={20}/>
+                        </button>
+                        <button onClick={() => setHistoryModal(null)} className="p-1.5 hover:bg-slate-700 rounded-lg"><X size={20}/></button>
+                    </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-0">
+                
+                {/* Scrollable Content Area */}
+                <div className="flex-1 overflow-y-auto p-0 overscroll-contain">
                     {getCousinHistory(historyModal).length === 0 ? (
                         <div className="p-8 text-center text-slate-400">No hay movimientos registrados.</div>
                     ) : (
                         <table className="w-full text-left text-sm border-collapse">
-                            <thead className="bg-slate-50 text-slate-500 font-medium sticky top-0">
+                            <thead className="bg-slate-50 text-slate-500 font-medium sticky top-0 z-10 shadow-sm">
                                 <tr>
-                                    <th className="p-3 border-b">Fecha/Desc</th>
-                                    <th className="p-3 border-b text-right">Monto</th>
+                                    <th className="p-3 border-b bg-slate-50">Fecha/Desc</th>
+                                    <th className="p-3 border-b text-right bg-slate-50">Monto</th>
                                 </tr>
                             </thead>
                             <tbody>

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Transaction, Booking, Category } from '../types';
 import { CATEGORY_COLORS, CATEGORIES } from '../constants';
 import { format } from 'date-fns';
@@ -52,6 +52,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
           if (isCousin) {
               totalPendingDebt += t.amountUSD;
           } else {
+              // Si paga la Caja, baja la caja.
               if (t.paidBy === 'Caja') currentBox -= t.amountUSD;
           }
       }
@@ -72,8 +73,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
           totalPendingDebt -= t.amountUSD;
       }
       if (t.category === 'Donación') {
-          if (!isCousin) currentBox += t.amountUSD;
-          else totalPendingDebt -= t.amountUSD; 
+          if (!isCousin) currentBox += t.amountUSD; // Donación Familia/Cliente -> Caja Sube
+          else totalPendingDebt -= t.amountUSD; // Donación Primo -> Deuda Baja (perdona deuda)
       }
     });
 
@@ -294,7 +295,10 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
                     {/* Detail Items */}
                     {expandedCategory === cat.name && (
                     <div className="bg-slate-50 border-t border-slate-100 shadow-inner">
-                        {/* Use spread operator to create a shallow copy before sorting to avoid mutation of read-only array */}
+                        {/* 
+                           IMPORTANTE: Usamos [...cat.transactions] para crear una copia antes de ordenar.
+                           Esto evita el error "Cannot assign to read only property" en React StrictMode.
+                        */}
                         {[...cat.transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
                         <div key={t.id} className="p-3 border-b border-slate-200 last:border-0 pl-9 pr-4 flex justify-between items-start">
                             <div>
