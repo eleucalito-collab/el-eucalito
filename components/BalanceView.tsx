@@ -52,7 +52,6 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
           if (isCousin) {
               totalPendingDebt += t.amountUSD;
           } else {
-              // Si paga la Caja, baja la caja.
               if (t.paidBy === 'Caja') currentBox -= t.amountUSD;
           }
       }
@@ -73,8 +72,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
           totalPendingDebt -= t.amountUSD;
       }
       if (t.category === 'Donación') {
-          if (!isCousin) currentBox += t.amountUSD; // Donación Familia/Cliente -> Caja Sube
-          else totalPendingDebt -= t.amountUSD; // Donación Primo -> Deuda Baja (perdona deuda)
+          if (!isCousin) currentBox += t.amountUSD;
+          else totalPendingDebt -= t.amountUSD; 
       }
     });
 
@@ -97,7 +96,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
         totalPendingDebt, 
         currentBox, 
         expensesByCategory, 
-        netProfit,
+        netProfit, 
         totalDonations 
     };
   }, [transactions]);
@@ -138,7 +137,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
   };
 
   return (
-    <div className="p-4 space-y-6 pb-24 relative">
+    <div className="p-4 space-y-3 pb-20 relative">
       {/* Edit Modal */}
       {editingTx && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
@@ -181,37 +180,33 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       )}
 
       {/* Cards Grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Row 1 */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Caja Actual</p>
-          <p className={`text-xl font-bold ${stats.currentBox >= 0 ? 'text-primary' : 'text-red-500'}`}>{formatCurrency(stats.currentBox)}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {/* Row 1: CAJA (VERDE) y GASTOS */}
+        <div className="bg-emerald-50 p-3 rounded-2xl shadow-sm border border-emerald-100">
+          <p className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider">Caja Actual</p>
+          <p className={`text-xl font-bold ${stats.currentBox >= 0 ? 'text-emerald-700' : 'text-red-500'}`}>{formatCurrency(stats.currentBox)}</p>
         </div>
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+        <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Gastos Totales</p>
           <p className="text-xl font-bold text-slate-700">{formatCurrency(stats.totalExpense)}</p>
         </div>
         
-        {/* Row 2 */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Ingresos</p>
-          <p className="text-xl font-bold text-emerald-600">{formatCurrency(stats.businessIncome)}</p>
-          <span className="text-[9px] text-slate-400">Reservas / Alquiler</span>
+        {/* Row 2: INGRESOS (AZUL) y DEUDA */}
+        <div className="bg-blue-50 p-3 rounded-2xl shadow-sm border border-blue-100">
+          <p className="text-[10px] text-blue-800 font-bold uppercase tracking-wider">INGRESOS AIRBNB</p>
+          <p className="text-xl font-bold text-blue-700">{formatCurrency(stats.businessIncome)}</p>
         </div>
         
-        {/* Deuda / Donaciones Card */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Deuda</p>
-          
-          <div className="flex justify-between items-baseline mb-1 border-b border-slate-50 pb-1">
-             <span className="text-[9px] text-slate-400">Neto Deuda</span>
+        {/* Deuda / Donaciones Card - Compact */}
+        <div className="bg-white p-3 px-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center space-y-1">
+          <div className="flex justify-between items-center">
+             <span className="text-[10px] text-slate-500 font-bold uppercase">Deuda</span>
              <span className={`text-sm font-bold ${stats.totalPendingDebt >= 0 ? 'text-pink-500' : 'text-emerald-500'}`}>
-                {stats.totalPendingDebt >= 0 ? 'Caja Debe' : 'Primos Deben'} {formatCurrency(Math.abs(stats.totalPendingDebt))}
+                {formatCurrency(Math.abs(stats.totalPendingDebt))}
              </span>
           </div>
-
-          <div className="flex justify-between items-baseline">
-             <span className="text-[9px] text-slate-400">Total Donado</span>
+          <div className="flex justify-between items-center">
+             <span className="text-[10px] text-slate-500 font-bold uppercase">Donaciones</span>
              <span className="text-sm font-bold text-purple-600">
                 {formatCurrency(stats.totalDonations)}
              </span>
@@ -220,13 +215,13 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
       </div>
 
       {/* GANANCIAS AIRBNB CARD */}
-      <div className="bg-slate-800 p-4 rounded-2xl shadow-md border border-slate-700 flex justify-between items-center text-white">
+      <div className="bg-slate-800 p-3 rounded-2xl shadow-md border border-slate-700 flex justify-between items-center text-white">
          <div>
             <div className="flex items-center gap-2 mb-1">
                 {stats.netProfit >= 0 ? <TrendingUp size={16} className="text-emerald-400"/> : <TrendingDown size={16} className="text-red-400"/>}
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ganancias Airbnb</p>
             </div>
-            <p className="text-[10px] text-slate-400">
+            <p className="text-[10px] text-slate-400 opacity-70">
                 (Ingresos + Donaciones) - Gastos
             </p>
          </div>
@@ -237,88 +232,56 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
          </div>
       </div>
 
-      {/* UNIFIED EXPENSES PANEL (Chart + Breakdown) */}
+      {/* UNIFIED EXPENSES PANEL (List Top - Chart Bottom) */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         
-        {/* Header & Chart */}
-        <div className="p-4 flex flex-col items-center bg-slate-50/50">
-             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Distribución de Gastos</h3>
-             <div style={{ width: '100%', height: 140 }}>
-                {stats.expensesByCategory.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie 
-                            data={stats.expensesByCategory} 
-                            cx="50%" 
-                            cy="50%" 
-                            innerRadius={40}
-                            outerRadius={60} 
-                            paddingAngle={2}
-                            dataKey="value"
-                            >
-                            {stats.expensesByCategory.map((entry, index) => <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.name as keyof typeof CATEGORY_COLORS]} />)}
-                            </Pie>
-                            <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
-                        </PieChart>
-                    </ResponsiveContainer>
-                ) : (
-                    <div className="h-full flex items-center justify-center text-slate-300 text-xs">
-                        Sin datos
-                    </div>
-                )}
-             </div>
+        <div className="p-3 pb-2 border-b border-slate-100 bg-slate-50/50">
+             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Distribución de Gastos</h3>
         </div>
 
-        {/* Breakdown List (Unified Legend) */}
-        <div className="divide-y divide-slate-100 border-t border-slate-100">
+        {/* Breakdown List (Top) */}
+        <div className="divide-y divide-slate-100">
             {stats.expensesByCategory.map((cat) => {
               const percentage = stats.totalExpense > 0 ? ((cat.value / stats.totalExpense) * 100).toFixed(0) : 0;
               return (
                 <div key={cat.name} className="bg-white">
                     <button 
                     onClick={() => toggleCategory(cat.name)}
-                    className="w-full p-4 flex justify-between items-center hover:bg-slate-50 transition-colors"
+                    className="w-full p-3 flex justify-between items-center hover:bg-slate-50 transition-colors"
                     >
                         <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full shadow-sm shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.name as keyof typeof CATEGORY_COLORS] }} />
-                            <span className="font-bold text-slate-700 text-sm">{cat.name}</span>
-                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded ml-1">
+                            <div className="w-2.5 h-2.5 rounded-full shadow-sm shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.name as keyof typeof CATEGORY_COLORS] }} />
+                            <span className="font-bold text-slate-700 text-xs">{cat.name}</span>
+                            <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded ml-1">
                                 {percentage}%
                             </span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-700 text-sm">{formatCurrency(cat.value)}</span>
-                            {expandedCategory === cat.name ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+                            <span className="font-bold text-slate-700 text-xs">{formatCurrency(cat.value)}</span>
+                            {expandedCategory === cat.name ? <ChevronUp size={14} className="text-slate-400"/> : <ChevronDown size={14} className="text-slate-400"/>}
                         </div>
                     </button>
                     
                     {/* Detail Items */}
                     {expandedCategory === cat.name && (
                     <div className="bg-slate-50 border-t border-slate-100 shadow-inner">
-                        {/* 
-                           IMPORTANTE: Usamos [...cat.transactions] para crear una copia antes de ordenar.
-                           Esto evita el error "Cannot assign to read only property" en React StrictMode.
-                        */}
                         {[...cat.transactions].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
-                        <div key={t.id} className="p-3 border-b border-slate-200 last:border-0 pl-9 pr-4 flex justify-between items-start">
-                            <div>
-                            <div className="flex gap-2 items-center">
-                                <span className="text-xs font-bold text-slate-700">{format(new Date(t.date), 'dd/MM/yy')}</span>
-                                <span className="text-xs text-slate-500">• {t.paidBy}</span>
-                            </div>
-                            <p className="text-sm text-slate-800">{t.description}</p>
+                        <div key={t.id} className="p-2 pl-8 border-b border-slate-200 last:border-0 flex justify-between items-start">
+                            <div className="max-w-[70%]">
+                                <p className="text-[10px] text-slate-400">{format(new Date(t.date), 'dd/MM/yy')} • {t.paidBy}</p>
+                                <p className="text-xs text-slate-700 leading-tight">{t.description}</p>
                             </div>
                             <div className="flex flex-col items-end">
-                            <span className="text-sm font-bold text-slate-700">{formatCurrency(t.amountUSD)}</span>
-                            {t.originalCurrency === 'UYU' && (
-                                <span className="text-[10px] text-slate-400">
-                                {formatUYU(t.originalAmount || 0)} (TC: {t.exchangeRate?.toFixed(2)})
-                                </span>
-                            )}
-                            <div className="flex gap-2 mt-1">
-                                <button onClick={(e) => { e.stopPropagation(); setEditingTx(t); }}><Pencil size={12} className="text-slate-400 hover:text-blue-500"/></button>
-                                <button onClick={(e) => handleDelete(e, t.id, t.description)}><Trash2 size={12} className="text-slate-400 hover:text-red-500"/></button>
-                            </div>
+                                <span className="text-xs font-bold text-slate-700">{formatCurrency(t.amountUSD)}</span>
+                                {t.originalCurrency === 'UYU' && (
+                                    <span className="text-[9px] text-slate-400">
+                                    {formatUYU(t.originalAmount || 0)}
+                                    </span>
+                                )}
+                                <div className="flex gap-1 mt-1">
+                                    <button onClick={(e) => { e.stopPropagation(); setEditingTx(t); }}><Pencil size={10} className="text-slate-400 hover:text-blue-500"/></button>
+                                    <button onClick={(e) => handleDelete(e, t.id, t.description)}><Trash2 size={10} className="text-slate-400 hover:text-red-500"/></button>
+                                </div>
                             </div>
                         </div>
                         ))}
@@ -328,27 +291,55 @@ const BalanceView: React.FC<BalanceViewProps> = ({ transactions, bookings }) => 
               );
             })}
         </div>
+
+        {/* Chart (Bottom - Mini) */}
+        {stats.expensesByCategory.length > 0 && (
+            <div className="p-4 bg-slate-50/30 flex justify-center border-t border-slate-100">
+                <div style={{ width: '100%', height: 120 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie 
+                            data={stats.expensesByCategory} 
+                            cx="50%" 
+                            cy="50%" 
+                            innerRadius={30}
+                            outerRadius={45} 
+                            paddingAngle={2}
+                            dataKey="value"
+                            >
+                            {stats.expensesByCategory.map((entry, index) => <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.name as keyof typeof CATEGORY_COLORS]} />)}
+                            </Pie>
+                            <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+        )}
       </div>
 
-      {/* Recent Movements (All mixed) */}
+      {/* Recent Movements (All mixed - Compact) */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <h3 className="p-4 text-sm font-bold text-slate-700 border-b border-slate-100 bg-slate-50">Todos los Movimientos</h3>
+        <h3 className="p-3 text-xs font-bold text-slate-500 border-b border-slate-100 bg-slate-50 uppercase tracking-wider">Últimos Movimientos</h3>
         <div className="max-h-60 overflow-y-auto no-scrollbar">
           {recentTransactions.map((t) => (
-            <div key={t.id} className="p-4 border-b border-slate-50 last:border-0 flex justify-between items-center hover:bg-slate-50 transition-colors">
-              <div className="flex flex-col">
-                <span className="text-xs text-slate-400">{format(new Date(t.date), 'dd MMM', { locale: es })} • {t.paidBy}</span>
-                <span className="text-sm text-slate-800 font-medium truncate max-w-[150px]">{t.description}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full w-fit mt-1 text-white" style={{ backgroundColor: CATEGORY_COLORS[t.category] }}>{t.category}</span>
+            <div key={t.id} className="p-2 border-b border-slate-50 last:border-0 flex justify-between items-center hover:bg-slate-50 transition-colors">
+              <div className="flex flex-col max-w-[65%]">
+                <div className="flex items-center gap-1 mb-0.5">
+                    <span className="text-[9px] text-slate-400">{format(new Date(t.date), 'dd MMM', { locale: es })}</span>
+                    <span className="text-[9px] text-slate-300">•</span>
+                    <span className="text-[9px] text-slate-500 font-medium">{t.paidBy}</span>
+                </div>
+                <span className="text-[11px] text-slate-800 leading-tight truncate">{t.description}</span>
+                <span className="text-[9px] px-1.5 py-0 rounded w-fit mt-0.5 text-white opacity-90" style={{ backgroundColor: CATEGORY_COLORS[t.category] }}>{t.category}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex flex-col items-end">
-                    <span className={`font-bold ${getAmountColor(t.category)}`}>
+                    <span className={`font-bold text-xs ${getAmountColor(t.category)}`}>
                     {['Ingreso', 'Préstamo', 'Pago Reserva', 'Donación'].includes(t.category) ? '+' : '-'}{formatCurrency(t.amountUSD)}
                     </span>
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); setEditingTx(t); }} className="text-slate-300 hover:text-blue-500 p-1"><Pencil size={14} /></button>
-                <button onClick={(e) => handleDelete(e, t.id, t.description)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={14} /></button>
+                <button onClick={(e) => { e.stopPropagation(); setEditingTx(t); }} className="text-slate-300 hover:text-blue-500 p-1"><Pencil size={12} /></button>
+                <button onClick={(e) => handleDelete(e, t.id, t.description)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={12} /></button>
               </div>
             </div>
           ))}

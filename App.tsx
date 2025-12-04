@@ -153,45 +153,48 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 mx-auto max-w-md shadow-2xl overflow-hidden relative">
+    // CAMBIO IMPORTANTE: h-[100dvh] para altura dinámica real en móviles y flex-col para layout fijo
+    <div className="h-[100dvh] bg-slate-50 font-sans text-slate-900 mx-auto max-w-md shadow-2xl flex flex-col overflow-hidden relative">
       
-      {/* Main Content Area */}
-      <main className="h-screen overflow-hidden flex flex-col">
-        {/* Dynamic Header based on Tab */}
-        <header className="bg-white p-4 border-b border-slate-100 sticky top-0 z-10 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-primary flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                    <Trees size={20} />
-                    </div>
-                    El Eucalito
-                </h1>
-                
-                {/* Botón Exportar solo visible en Balance */}
-                {activeTab === 'balance' && (
-                    <button 
-                        onClick={handleExportCSV}
-                        className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded text-[10px] font-bold transition-colors"
-                        title="Exportar a Excel/CSV"
-                    >
-                        <Download size={12} />
-                        CSV
-                    </button>
-                )}
-            </div>
+      {/* Header Fijo */}
+      <header className="bg-white p-4 border-b border-slate-100 shrink-0 flex justify-between items-center z-10">
+          <div className="flex items-center gap-2">
+              {/* TÍTULO ACTUALIZADO: NEGRO, GRANDE, FUENTE OUTFIT */}
+              <h1 className="text-2xl font-display font-black text-black flex items-center gap-2 uppercase tracking-widest">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <Trees size={20} />
+                  </div>
+                  El Eucalito
+              </h1>
+              
+              {/* Botón Exportar solo visible en Balance */}
+              {activeTab === 'balance' && (
+                  <button 
+                      onClick={handleExportCSV}
+                      className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded text-[10px] font-bold transition-colors"
+                      title="Exportar a Excel/CSV"
+                  >
+                      <Download size={12} />
+                      CSV
+                  </button>
+              )}
+          </div>
 
-            <div className="flex items-center gap-2">
-                {isSynced && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">ONLINE</span>}
-            </div>
-        </header>
+          <div className="flex items-center gap-2">
+              {isSynced && (
+                  // INDICADOR ONLINE: SOLO PUNTO VERDE
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" title="Online"></div>
+              )}
+          </div>
+      </header>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar">
-            {renderContent()}
-        </div>
+      {/* Contenido Scrolleable (ocupa el espacio restante) */}
+      <main className="flex-1 overflow-y-auto no-scrollbar relative bg-slate-50">
+          {renderContent()}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="absolute bottom-0 w-full bg-white border-t border-slate-200 flex justify-between px-6 py-3 pb-6 z-30 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)]">
+      {/* Bottom Navigation Fija */}
+      <nav className="bg-white border-t border-slate-200 flex justify-between px-6 py-3 pb-6 shrink-0 z-30 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)]">
         <button 
           onClick={() => setActiveTab('balance')}
           className={`flex flex-col items-center gap-1 ${activeTab === 'balance' ? 'text-primary' : 'text-slate-400'}`}
